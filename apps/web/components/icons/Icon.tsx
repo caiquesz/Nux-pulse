@@ -5,7 +5,7 @@ export type IconName =
   | "alerts" | "forecast" | "report" | "search" | "filter" | "export"
   | "more" | "sun" | "moon" | "sliders" | "sidebar" | "chevdown" | "check"
   | "close" | "up" | "down" | "arrowup" | "arrowdown" | "calendar" | "play"
-  | "plus" | "bell" | "sparkline" | "terms" | "geo" | "pacing" | "gear" | "health";
+  | "plus" | "bell" | "sparkline" | "terms" | "geo" | "pacing" | "gear" | "health" | "refresh";
 
 const PATHS: Record<IconName, ReactNode> = {
   overview: <path d="M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z"/>,
@@ -42,6 +42,7 @@ const PATHS: Record<IconName, ReactNode> = {
   pacing: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></>,
   gear: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 01-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 010-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 014 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 010 4h-.1a1.7 1.7 0 00-1.5 1z"/></>,
   health: <path d="M3 12h4l3-8 4 16 3-8h4"/>,
+  refresh: <path d="M21 12a9 9 0 11-3-6.7M21 4v5h-5"/>,
 };
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {

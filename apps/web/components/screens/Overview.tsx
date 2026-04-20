@@ -1,5 +1,5 @@
 "use client";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { differenceInDays, format } from "date-fns";
@@ -12,7 +12,9 @@ import { Sparkline } from "@/components/primitives/Sparkline";
 import { Icon } from "@/components/icons/Icon";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import {
+  listJobs,
   metaOverview, metaCampaigns, metaDaily,
+  triggerMetaBackfill,
   type MetaOverview, type MetaCampaignsResponse, type MetaDailyResponse,
   type RangeOpts,
 } from "@/lib/api";
@@ -54,6 +56,27 @@ export function Overview() {
     queryKey: ["meta", "overview", ...queryKeyBase],
     queryFn: () => metaOverview(slug, rangeOpts),
     enabled: !!slug,
+  });
+
+  // Sync status + trigger
+  const qc = useQueryClient();
+  const jobsQ = useQuery({
+    queryKey: ["sync-jobs", slug],
+    queryFn: () => listJobs(slug, 1),
+    enabled: !!slug,
+    refetchInterval: (q) => (q.state.data?.[0]?.status === "running" ? 3000 : false),
+  });
+  const running = jobsQ.data?.[0]?.status === "running";
+  const backfillMut = useMutation({
+    mutationFn: () => triggerMetaBackfill(slug, { days, level: "ad" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sync-jobs", slug] });
+      // quando o job terminar, o refetchInterval para e o polling reflete no status.
+      // Após done, revalida métricas:
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ["meta"] });
+      }, 5000);
+    },
   });
   const campaignsQ = useQuery<MetaCampaignsResponse>({
     queryKey: ["meta", "campaigns", ...queryKeyBase],
@@ -98,6 +121,15 @@ export function Overview() {
             ))}
           </div>
           <DateRangePicker value={custom} onChange={setCustom} />
+          <button
+            className="btn ghost"
+            onClick={() => backfillMut.mutate()}
+            disabled={running || backfillMut.isPending}
+            title={running ? "Sincronização em andamento…" : `Sincronizar últimos ${days} dias da Meta`}
+          >
+            <Icon name="refresh" size={12} />
+            {running ? "Sincronizando…" : backfillMut.isPending ? "Enviando…" : "Sincronizar"}
+          </button>
           <button className="btn ghost">
             <Icon name="export" size={12} />
             Exportar
