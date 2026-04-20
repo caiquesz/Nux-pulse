@@ -86,6 +86,17 @@ INSIGHTS_FIELDS = ",".join([
 ])
 
 
+def _extract_after_cursor(url: str) -> str | None:
+    """Extrai o parâmetro &after= da URL de paginação. Usado pra detectar loop."""
+    import urllib.parse as _urlp
+    try:
+        qs = _urlp.parse_qs(_urlp.urlsplit(url).query)
+        v = qs.get("after", [None])[0]
+        return v
+    except Exception:
+        return None
+
+
 class MetaApiError(RuntimeError):
     def __init__(self, status: int, payload: dict):
         self.status = status
@@ -131,8 +142,13 @@ class MetaClient:
             return 0
 
     def _get(self, url: str, params: dict | None = None, *, retries: int = 2) -> dict:
-        # Log da URL simplificada pra leitura (sem token).
-        short = url.split("/v22.0/")[-1] if "/v22.0/" in url else url
+        # Log da URL simplificada pra leitura SEM o token.
+        # Meta devolve URLs de paginação com token embutido na query — precisa redact.
+        short = url
+        if "graph.facebook.com" in short:
+            # remove o versionamento e a query completa, mantém só o path
+            path = short.split("graph.facebook.com/")[-1]
+            short = "/".join(path.split("?")[0].split("/")[1:]) or path.split("?")[0]
         merged = {**(params or {}), "access_token": self._token}
         last_err: Exception | None = None
         for attempt in range(retries + 1):
@@ -179,15 +195,43 @@ class MetaClient:
         raise last_err or RuntimeError(f"exhausted retries for {url}")
 
     def _paginate(self, url: str, params: dict | None = None) -> Iterator[dict]:
+        """Pagina via `paging.next`. Defesa contra o bug do Meta que devolve o MESMO
+        cursor `after` indefinidamente (loop infinito) — se o cursor repete, para.
+        Também para se a página chega vazia ou se excedeu um limite defensivo."""
         page_url: str | None = url
         page_params = params
+        seen_cursors: set[str] = set()
+        page_count = 0
+        MAX_PAGES = 200  # guard: 200 pages * 100 rows = 20k entities. Ajuste se precisar.
+
         while page_url:
+            page_count += 1
+            if page_count > MAX_PAGES:
+                _log.info(f"pagination: MAX_PAGES ({MAX_PAGES}) atingido, parando")
+                break
+
             data = self._get(page_url, page_params)
-            for item in data.get("data", []):
+            rows = data.get("data", [])
+            if not rows:
+                break
+            for item in rows:
                 yield item
+
             paging = data.get("paging", {})
-            page_url = paging.get("next")
-            page_params = None  # next URL already carries all params
+            next_url = paging.get("next")
+            if not next_url:
+                break
+
+            # detecta cursor repetido (bug do Graph API)
+            cursor = _extract_after_cursor(next_url)
+            if cursor and cursor in seen_cursors:
+                _log.info(f"pagination: cursor '{cursor[:20]}…' repetido, parando (Graph API bug)")
+                break
+            if cursor:
+                seen_cursors.add(cursor)
+
+            page_url = next_url
+            page_params = None
 
     # ─── high-level ──────────────────────────────────────────────────────
     def get_account(self, account_id: str) -> dict:
