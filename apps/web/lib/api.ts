@@ -155,6 +155,59 @@ export const metaCampaigns = (slug: string, opts: RangeOpts = {}) =>
 export const metaDaily = (slug: string, opts: RangeOpts = {}) =>
   get<MetaDailyResponse>(`/api/clients/${slug}/meta/insights/daily?${rangeQuery(opts)}`);
 
+// Adsets / Ads / Creatives / Funnel
+export type MetaAdsetRow = {
+  id: string; name: string; campaign_id: string; campaign_name: string;
+  status: string | null; optimization_goal: string | null; daily_budget: number;
+  spend: number; impressions: number; clicks: number; ctr: number; cpc: number;
+};
+export const metaAdsets = (slug: string, opts: RangeOpts & { campaign_id?: string } = {}) => {
+  const q = new URLSearchParams(rangeQuery(opts));
+  if (opts.campaign_id) q.set("campaign_id", opts.campaign_id);
+  return get<{ adsets: MetaAdsetRow[]; period_days: number }>(
+    `/api/clients/${slug}/meta/adsets?${q.toString()}`
+  );
+};
+
+export type MetaAdRow = {
+  id: string; name: string; adset_id: string; campaign_id: string;
+  status: string | null; creative_id: string | null;
+  thumb_url: string | null; creative_type: string | null; creative_title: string | null;
+  spend: number; impressions: number; clicks: number; ctr: number; cpc: number;
+};
+export const metaAds = (slug: string, opts: RangeOpts & { campaign_id?: string; adset_id?: string; limit?: number } = {}) => {
+  const q = new URLSearchParams(rangeQuery(opts));
+  if (opts.campaign_id) q.set("campaign_id", opts.campaign_id);
+  if (opts.adset_id) q.set("adset_id", opts.adset_id);
+  if (opts.limit) q.set("limit", String(opts.limit));
+  return get<{ ads: MetaAdRow[]; period_days: number }>(
+    `/api/clients/${slug}/meta/ads?${q.toString()}`
+  );
+};
+
+export type MetaCreativeRow = {
+  id: string; name: string | null; thumb_url: string | null;
+  creative_type: string | null; title: string | null; body: string | null;
+  ads_using: number;
+  spend: number; impressions: number; clicks: number; ctr: number; cpc: number;
+};
+export const metaCreatives = (slug: string, opts: RangeOpts & { limit?: number } = {}) => {
+  const q = new URLSearchParams(rangeQuery(opts));
+  if (opts.limit) q.set("limit", String(opts.limit));
+  return get<{ creatives: MetaCreativeRow[]; period_days: number }>(
+    `/api/clients/${slug}/meta/creatives?${q.toString()}`
+  );
+};
+
+export type FunnelStage = { key: string; label: string; value: number; conversion_from_prev: number | null };
+export type MetaFunnelResponse = {
+  client: string; period_days: number;
+  stages: FunnelStage[];
+  other_actions: Record<string, number>;
+};
+export const metaFunnel = (slug: string, opts: RangeOpts = {}) =>
+  get<MetaFunnelResponse>(`/api/clients/${slug}/meta/funnel?${rangeQuery(opts)}`);
+
 // ─── sync ────────────────────────────────────────────────────────────────
 export const listJobs = (slug?: string, limit = 20) => {
   const q = new URLSearchParams();
