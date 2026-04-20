@@ -1,4 +1,7 @@
 """Endpoints de sincronização — disparar backfills e inspecionar jobs."""
+import time
+import traceback
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -8,6 +11,7 @@ from app.core.db import SessionLocal, get_db
 from app.models.client import Client
 from app.models.connection import AccountConnection, Platform
 from app.models.ops import SyncJob
+from app.services.meta.client import MetaApiError, MetaClient
 from app.services.meta.ingest import run_backfill
 
 router = APIRouter(prefix="/api/sync", tags=["sync"])
@@ -73,6 +77,54 @@ def start_backfill(slug: str, body: BackfillRequest, bg: BackgroundTasks, db: Se
         raise HTTPException(400, "client has no Meta connection")
     bg.add_task(_run_bg, c.id, conn.id, body.days, body.level)
     return {"accepted": True, "client": slug, "platform": "meta", "days": body.days, "level": body.level}
+
+
+@router.get("/meta/{slug}/diagnose")
+def diagnose_meta(slug: str, db: Session = Depends(get_db)):
+    """Faz 1 call síncrono à Meta Graph API pra validar token + account + rede.
+    Retorna resultado OU erro detalhado sem mascarar. Timeout curto (15s)."""
+    c = db.query(Client).filter(Client.slug == slug).first()
+    if not c:
+        raise HTTPException(404, "client not found")
+    conn = (
+        db.query(AccountConnection)
+        .filter(AccountConnection.client_id == c.id, AccountConnection.platform == Platform.meta)
+        .first()
+    )
+    if not conn or not conn.tokens_enc:
+        raise HTTPException(400, "no meta connection")
+    token = decrypt(conn.tokens_enc)
+    started = time.time()
+    try:
+        # retries=0 pra falhar rápido em vez de ficar em backoff
+        client = MetaClient(token, timeout=15.0)
+        client._get_retries = 0  # noqa: acesso interno intencional
+        acc = client._get(f"https://graph.facebook.com/v22.0/{conn.external_account_id}", {
+            "fields": "id,account_id,name,account_status,currency,timezone_name,amount_spent",
+        }, retries=0)
+        client.close()
+        return {
+            "ok": True,
+            "duration_s": round(time.time() - started, 2),
+            "account": acc,
+            "connection_id": conn.id,
+        }
+    except MetaApiError as e:
+        return {
+            "ok": False,
+            "duration_s": round(time.time() - started, 2),
+            "error_type": "MetaApiError",
+            "status": e.status,
+            "payload": e.payload,
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "duration_s": round(time.time() - started, 2),
+            "error_type": type(e).__name__,
+            "message": str(e)[:500],
+            "trace": traceback.format_exc()[:800],
+        }
 
 
 @router.get("/jobs", response_model=list[JobRead])
