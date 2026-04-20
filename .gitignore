@@ -1,0 +1,40 @@
+# deps
+node_modules/
+.pnp/
+.pnp.js
+
+# next
+.next/
+out/
+dist/
+build/
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# env
+.env
+.env.local
+*.local
+
+# editor
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# db
+*.db
+*.db-journal
+
+# logs
+*.log
+
+# compose volumes
+.volumes/
