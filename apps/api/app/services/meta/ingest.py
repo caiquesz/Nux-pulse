@@ -397,8 +397,26 @@ def run_backfill(
             )
             total_insights += n
             _log.info(f"[job {job.id}] level={lvl} ingested {n} rows")
+
+        # 4) breakdowns em level=account pra telas de Audiência/Geo/Pacing
+        # Cada breakdown vira rows com breakdown_key/value diferente — não colide com insights sem breakdown.
+        BREAKDOWNS = ["age", "gender", "region", "hourly_stats_aggregated_by_advertiser_time_zone"]
+        for bk in BREAKDOWNS:
+            try:
+                _log.info(f"[job {job.id}] phase 4 — breakdown={bk}")
+                n = sync_insights(
+                    db, client_id=connection.client_id,
+                    account_id=connection.external_account_id, token=token,
+                    level="account", since=since, until=until, breakdown=bk,
+                )
+                total_insights += n
+                _log.info(f"[job {job.id}] breakdown={bk} ingested {n} rows")
+            except Exception as e:
+                # breakdowns são best-effort: se a API rejeitar um, continua os outros
+                _log.info(f"[job {job.id}] breakdown={bk} falhou (não crítico): {e!s}"[:200])
+
         rows = total_insights
-        _log.info(f"[job {job.id}] insights total {rows} rows across {len(levels_to_sync)} levels")
+        _log.info(f"[job {job.id}] insights total {rows} rows")
         job.rows_written = rows + sum(structure_counts.values())
         job.status = "done"
         job.finished_at = datetime.now(timezone.utc)

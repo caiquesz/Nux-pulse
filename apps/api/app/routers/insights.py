@@ -6,6 +6,7 @@ Endpoints de leitura dos dados ingeridos.
 - GET /api/clients/{slug}/meta/overview          → cards KPI (spend, impressions, clicks, conv, roas, cpa)
 """
 from datetime import date, timedelta
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
@@ -408,6 +409,263 @@ def meta_funnel(
         "period_days": (until_d - since_d).days + 1,
         "stages": out,
         "other_actions": other,
+    }
+
+
+@router.get("/{slug}/meta/pacing")
+def meta_pacing(
+    slug: str,
+    days: int = Query(30, ge=1, le=365),
+    since: str | None = Query(None),
+    until: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Pacing: budget previsto (daily_budget * dias) vs spend real por campanha.
+    Só considera campanhas com `daily_budget > 0`. Status:
+    - underpace: < 70% do esperado
+    - on_pace: 70-130%
+    - overpace: > 130%
+    """
+    c = _client_or_404(db, slug)
+    since_d, until_d = _window(days, since, until)
+    period_days = (until_d - since_d).days + 1
+
+    rows = (
+        db.query(
+            MetaCampaign.id, MetaCampaign.name, MetaCampaign.effective_status,
+            MetaCampaign.daily_budget,
+            func.coalesce(func.sum(MetaInsightsDaily.spend), 0).label("spend"),
+        )
+        .outerjoin(
+            MetaInsightsDaily,
+            (MetaInsightsDaily.object_id == MetaCampaign.id)
+            & (MetaInsightsDaily.level == "campaign")
+            & (MetaInsightsDaily.breakdown_key == "none")
+            & (MetaInsightsDaily.date >= since_d)
+            & (MetaInsightsDaily.date <= until_d),
+        )
+        .filter(MetaCampaign.client_id == c.id)
+        .group_by(MetaCampaign.id, MetaCampaign.name, MetaCampaign.effective_status, MetaCampaign.daily_budget)
+        .all()
+    )
+
+    out = []
+    total_budget = Decimal(0)
+    total_spend = Decimal(0)
+    for r in rows:
+        db_val = Decimal(r.daily_budget) if r.daily_budget is not None else Decimal(0)
+        if db_val <= 0:
+            continue
+        expected = db_val * period_days
+        spent = Decimal(r.spend or 0)
+        pct = float(spent / expected * 100) if expected > 0 else 0
+        status = "underpace" if pct < 70 else ("overpace" if pct > 130 else "on_pace")
+        out.append({
+            "campaign_id": r.id,
+            "campaign_name": r.name,
+            "effective_status": r.effective_status,
+            "daily_budget": float(db_val),
+            "expected_spend": float(expected),
+            "actual_spend": float(spent),
+            "percent_of_expected": round(pct, 2),
+            "status": status,
+        })
+        total_budget += expected
+        total_spend += spent
+
+    out.sort(key=lambda r: -r["actual_spend"])
+    overall_pct = float(total_spend / total_budget * 100) if total_budget > 0 else 0
+    return {
+        "client": slug,
+        "period_days": period_days,
+        "campaigns": out,
+        "totals": {
+            "expected_spend": float(total_budget),
+            "actual_spend": float(total_spend),
+            "percent_of_expected": round(overall_pct, 2),
+        },
+    }
+
+
+@router.get("/{slug}/meta/alerts")
+def meta_alerts(slug: str, db: Session = Depends(get_db)):
+    """Deriva alertas das últimas 2 semanas:
+    - fatigue: CTR caiu >30% na última semana vs. semana anterior (por campanha ativa)
+    - cpc_spike: CPC dobrou na última semana
+    - budget_underpace: spend < 50% do esperado últimos 7d
+    - no_spend: campanha ATIVA sem gasto nos últimos 3 dias
+    """
+    c = _client_or_404(db, slug)
+    today = date.today()
+    last_week_start = today - timedelta(days=7)
+    prev_week_start = today - timedelta(days=14)
+
+    def window_stats(start: date, end: date) -> dict[str, dict[str, float]]:
+        rows = (
+            db.query(
+                MetaInsightsDaily.object_id,
+                func.coalesce(func.sum(MetaInsightsDaily.spend), 0).label("spend"),
+                func.coalesce(func.sum(MetaInsightsDaily.impressions), 0).label("impressions"),
+                func.coalesce(func.sum(MetaInsightsDaily.clicks), 0).label("clicks"),
+            )
+            .filter(
+                MetaInsightsDaily.client_id == c.id,
+                MetaInsightsDaily.level == "campaign",
+                MetaInsightsDaily.breakdown_key == "none",
+                MetaInsightsDaily.date >= start,
+                MetaInsightsDaily.date < end,
+            )
+            .group_by(MetaInsightsDaily.object_id).all()
+        )
+        return {
+            r.object_id: {
+                "spend": float(r.spend or 0),
+                "impressions": int(r.impressions or 0),
+                "clicks": int(r.clicks or 0),
+                "ctr": float(r.clicks or 0) / float(r.impressions or 0) * 100 if r.impressions else 0,
+                "cpc": float(r.spend or 0) / float(r.clicks or 0) if r.clicks else 0,
+            } for r in rows
+        }
+
+    last = window_stats(last_week_start, today + timedelta(days=1))
+    prev = window_stats(prev_week_start, last_week_start)
+
+    campaigns = {
+        r.id: r for r in db.query(MetaCampaign).filter(
+            MetaCampaign.client_id == c.id
+        ).all()
+    }
+
+    alerts = []
+    for cid, cmp in campaigns.items():
+        l = last.get(cid, {"spend": 0, "ctr": 0, "cpc": 0, "clicks": 0})
+        p = prev.get(cid, {"spend": 0, "ctr": 0, "cpc": 0, "clicks": 0})
+        name = cmp.name
+        status = (cmp.effective_status or "").upper()
+        active = status == "ACTIVE"
+
+        # CTR fatigue
+        if p["ctr"] > 1 and l["ctr"] > 0 and l["ctr"] < p["ctr"] * 0.7:
+            alerts.append({
+                "severity": "warn", "kind": "fatigue",
+                "campaign_id": cid, "campaign_name": name,
+                "message": f"CTR caiu {(1 - l['ctr']/p['ctr'])*100:.1f}% vs. semana anterior",
+                "detail": {"ctr_last": round(l['ctr'], 2), "ctr_prev": round(p['ctr'], 2)},
+            })
+
+        # CPC spike
+        if p["cpc"] > 0 and l["cpc"] > p["cpc"] * 2 and l["clicks"] > 10:
+            alerts.append({
+                "severity": "neg", "kind": "cpc_spike",
+                "campaign_id": cid, "campaign_name": name,
+                "message": f"CPC subiu {(l['cpc']/p['cpc']-1)*100:.0f}% vs. semana anterior",
+                "detail": {"cpc_last": round(l['cpc'], 2), "cpc_prev": round(p['cpc'], 2)},
+            })
+
+        # Underpace: active mas gasto baixo
+        budget = float(cmp.daily_budget or 0)
+        if active and budget > 0:
+            expected_7d = budget * 7
+            if l["spend"] < expected_7d * 0.5 and expected_7d > 0:
+                alerts.append({
+                    "severity": "warn", "kind": "underpace",
+                    "campaign_id": cid, "campaign_name": name,
+                    "message": f"Gastou {l['spend']/expected_7d*100:.0f}% do esperado últimos 7d",
+                    "detail": {"expected_7d": round(expected_7d, 2), "actual_7d": round(l['spend'], 2)},
+                })
+
+        # No spend: active mas 0 gasto 3 dias
+        if active:
+            recent = (
+                db.query(func.coalesce(func.sum(MetaInsightsDaily.spend), 0))
+                .filter(
+                    MetaInsightsDaily.client_id == c.id,
+                    MetaInsightsDaily.level == "campaign",
+                    MetaInsightsDaily.breakdown_key == "none",
+                    MetaInsightsDaily.object_id == cid,
+                    MetaInsightsDaily.date >= today - timedelta(days=3),
+                ).scalar() or 0
+            )
+            if float(recent) == 0 and budget > 0:
+                alerts.append({
+                    "severity": "neg", "kind": "no_spend",
+                    "campaign_id": cid, "campaign_name": name,
+                    "message": "Campanha ativa sem gasto nos últimos 3 dias",
+                    "detail": {"daily_budget": budget},
+                })
+
+    # ordena: neg > warn > info
+    sev_rank = {"neg": 0, "warn": 1, "info": 2}
+    alerts.sort(key=lambda a: (sev_rank.get(a["severity"], 9), a["campaign_name"]))
+    return {"client": slug, "generated_at": today.isoformat(), "alerts": alerts}
+
+
+def _breakdown_aggregate(db: Session, client_id: int, key: str, since_d: date, until_d: date):
+    """Agrega insights filtrados pelo breakdown_key, somando spend/imps/clks/actions."""
+    rows = (
+        db.query(
+            MetaInsightsDaily.breakdown_value,
+            func.coalesce(func.sum(MetaInsightsDaily.spend), 0).label("spend"),
+            func.coalesce(func.sum(MetaInsightsDaily.impressions), 0).label("impressions"),
+            func.coalesce(func.sum(MetaInsightsDaily.clicks), 0).label("clicks"),
+        )
+        .filter(
+            MetaInsightsDaily.client_id == client_id,
+            MetaInsightsDaily.level == "account",
+            MetaInsightsDaily.breakdown_key == key,
+            MetaInsightsDaily.date >= since_d,
+            MetaInsightsDaily.date <= until_d,
+        )
+        .group_by(MetaInsightsDaily.breakdown_value)
+        .order_by(func.coalesce(func.sum(MetaInsightsDaily.spend), 0).desc())
+        .all()
+    )
+    return [
+        {
+            "value": r.breakdown_value or "desconhecido",
+            "spend": float(r.spend or 0),
+            "impressions": int(r.impressions or 0),
+            "clicks": int(r.clicks or 0),
+            "ctr": round(float(r.clicks or 0) / float(r.impressions or 0) * 100, 4) if r.impressions else 0,
+            "cpc": round(float(r.spend or 0) / float(r.clicks or 0), 4) if r.clicks else 0,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/{slug}/meta/audience")
+def meta_audience(
+    slug: str,
+    days: int = Query(30, ge=1, le=365),
+    since: str | None = Query(None),
+    until: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    c = _client_or_404(db, slug)
+    since_d, until_d = _window(days, since, until)
+    return {
+        "client": slug,
+        "period_days": (until_d - since_d).days + 1,
+        "by_age": _breakdown_aggregate(db, c.id, "age", since_d, until_d),
+        "by_gender": _breakdown_aggregate(db, c.id, "gender", since_d, until_d),
+    }
+
+
+@router.get("/{slug}/meta/geo-time")
+def meta_geo_time(
+    slug: str,
+    days: int = Query(30, ge=1, le=365),
+    since: str | None = Query(None),
+    until: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    c = _client_or_404(db, slug)
+    since_d, until_d = _window(days, since, until)
+    return {
+        "client": slug,
+        "period_days": (until_d - since_d).days + 1,
+        "by_region": _breakdown_aggregate(db, c.id, "region", since_d, until_d),
+        "by_hour": _breakdown_aggregate(db, c.id, "hourly_stats_aggregated_by_advertiser_time_zone", since_d, until_d),
     }
 
 

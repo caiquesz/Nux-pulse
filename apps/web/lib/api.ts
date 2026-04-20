@@ -208,6 +208,41 @@ export type MetaFunnelResponse = {
 export const metaFunnel = (slug: string, opts: RangeOpts = {}) =>
   get<MetaFunnelResponse>(`/api/clients/${slug}/meta/funnel?${rangeQuery(opts)}`);
 
+// Pacing
+export type PacingCampaign = {
+  campaign_id: string; campaign_name: string; effective_status: string | null;
+  daily_budget: number; expected_spend: number; actual_spend: number;
+  percent_of_expected: number; status: "underpace" | "on_pace" | "overpace";
+};
+export type PacingResponse = {
+  client: string; period_days: number;
+  campaigns: PacingCampaign[];
+  totals: { expected_spend: number; actual_spend: number; percent_of_expected: number };
+};
+export const metaPacing = (slug: string, opts: RangeOpts = {}) =>
+  get<PacingResponse>(`/api/clients/${slug}/meta/pacing?${rangeQuery(opts)}`);
+
+// Alerts
+export type Alert = {
+  severity: "neg" | "warn" | "info";
+  kind: "fatigue" | "cpc_spike" | "underpace" | "no_spend" | string;
+  campaign_id: string; campaign_name: string;
+  message: string; detail: Record<string, number>;
+};
+export const metaAlerts = (slug: string) =>
+  get<{ client: string; generated_at: string; alerts: Alert[] }>(`/api/clients/${slug}/meta/alerts`);
+
+// Audience & Geo
+export type BreakdownRow = { value: string; spend: number; impressions: number; clicks: number; ctr: number; cpc: number };
+export const metaAudience = (slug: string, opts: RangeOpts = {}) =>
+  get<{ by_age: BreakdownRow[]; by_gender: BreakdownRow[] }>(
+    `/api/clients/${slug}/meta/audience?${rangeQuery(opts)}`
+  );
+export const metaGeoTime = (slug: string, opts: RangeOpts = {}) =>
+  get<{ by_region: BreakdownRow[]; by_hour: BreakdownRow[] }>(
+    `/api/clients/${slug}/meta/geo-time?${rangeQuery(opts)}`
+  );
+
 // ─── sync ────────────────────────────────────────────────────────────────
 export const listJobs = (slug?: string, limit = 20) => {
   const q = new URLSearchParams();
