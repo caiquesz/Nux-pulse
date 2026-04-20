@@ -6,6 +6,8 @@ import { useState } from "react";
 import {
   createMetaConnection,
   listConnections,
+  listJobs,
+  triggerMetaBackfill,
   type MetaConnectionPayload,
 } from "@/lib/api";
 
@@ -34,6 +36,33 @@ export default function SettingsPage() {
       setJustSaved(true);
       setToken(""); // nunca mais mostra o token
       setTimeout(() => setJustSaved(false), 3000);
+    },
+  });
+
+  // ─── Sync manual ─────────────────────────────────────────────
+  const [syncDays, setSyncDays] = useState<number>(7);
+
+  // Último job + polling enquanto estiver rodando
+  const jobs = useQuery({
+    queryKey: ["sync-jobs", slug],
+    queryFn: () => listJobs(slug, 1),
+    enabled: !!slug,
+    refetchInterval: (q) => {
+      const last = q.state.data?.[0];
+      return last && last.status === "running" ? 3000 : false;
+    },
+  });
+  const lastJob = jobs.data?.[0];
+  const running = lastJob?.status === "running";
+
+  const backfill = useMutation({
+    mutationFn: (days: number) => triggerMetaBackfill(slug, { days, level: "ad" }),
+    onSuccess: () => {
+      // força re-fetch do job e invalida dashboards
+      qc.invalidateQueries({ queryKey: ["sync-jobs", slug] });
+      qc.invalidateQueries({ queryKey: ["meta-overview"] });
+      qc.invalidateQueries({ queryKey: ["meta-campaigns"] });
+      qc.invalidateQueries({ queryKey: ["meta-daily"] });
     },
   });
 
@@ -136,9 +165,66 @@ export default function SettingsPage() {
           </form>
         </div>
 
+        {metaConn && (
+          <div className="card" style={{ padding: 24, marginTop: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 600 }}>Sincronizar dados</h2>
+              {running && (
+                <span className="tag" style={{ background: "var(--warn-bg)", color: "var(--warn)" }}>
+                  rodando…
+                </span>
+              )}
+            </div>
+            <p style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 16 }}>
+              {lastJob
+                ? `Último job #${lastJob.id} · ${lastJob.status} · ${lastJob.rows_written} rows${
+                    lastJob.finished_at ? ` · ${new Date(lastJob.finished_at).toLocaleString("pt-BR")}` : ""
+                  }`
+                : "Nenhum backfill executado ainda."}
+            </p>
+
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <label style={{ display: "grid", gap: 6, flex: "0 0 auto" }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Janela</span>
+                <select
+                  value={syncDays}
+                  onChange={(e) => setSyncDays(Number(e.target.value))}
+                  disabled={running || backfill.isPending}
+                  style={{ ...inputStyle, minWidth: 120 }}
+                >
+                  <option value={1}>1 dia</option>
+                  <option value={7}>7 dias</option>
+                  <option value={30}>30 dias</option>
+                  <option value={90}>90 dias</option>
+                </select>
+              </label>
+
+              <button
+                type="button"
+                className="btn"
+                onClick={() => backfill.mutate(syncDays)}
+                disabled={running || backfill.isPending}
+              >
+                {running ? "Sincronizando…" : backfill.isPending ? "Enviando…" : "Sincronizar agora"}
+              </button>
+            </div>
+
+            {lastJob?.status === "error" && lastJob.error_message && (
+              <div style={{ color: "var(--neg)", fontSize: 12, marginTop: 10 }}>
+                ⚠ {lastJob.error_message}
+              </div>
+            )}
+            {backfill.isError && (
+              <div style={{ color: "var(--neg)", fontSize: 12, marginTop: 10 }}>
+                {(backfill.error as Error).message}
+              </div>
+            )}
+          </div>
+        )}
+
         <p style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 12, lineHeight: 1.5 }}>
-          Google Ads, metas e taxonomia vêm nas próximas fases. Enquanto isso, depois de conectar a Meta,
-          chame <code className="mono">POST /api/sync/meta/{slug}/backfill</code> pra popular 30 dias de dados.
+          Google Ads, metas e taxonomia vêm nas próximas fases. O backfill popula todos os níveis
+          (account · campaign · adset · ad) pro dashboard completo.
         </p>
       </section>
     </>

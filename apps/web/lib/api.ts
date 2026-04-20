@@ -162,3 +162,11 @@ export const listJobs = (slug?: string, limit = 20) => {
   q.set("limit", String(limit));
   return get<SyncJobRead[]>(`/api/sync/jobs?${q.toString()}`);
 };
+
+export type BackfillLevel = "account" | "campaign" | "adset" | "ad";
+export type BackfillPayload = { days: number; level?: BackfillLevel };
+export const triggerMetaBackfill = (slug: string, body: BackfillPayload) =>
+  post<{ accepted: boolean; days: number; level: string }>(
+    `/api/sync/meta/${slug}/backfill`,
+    { level: "ad", ...body }
+  );
