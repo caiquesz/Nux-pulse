@@ -1,5 +1,14 @@
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+# libpq (e por extensão o psycopg v3) não conhece estes parâmetros — eles são
+# hints pra ferramentas que leem a URL por fora (Prisma, Drizzle, Supabase CLI).
+# Se chegarem na string de conexão, libpq rejeita. Strippar é mais seguro que
+# configurar connect_args — mantém config/env.py iguais.
+_SUPABASE_HINT_PARAMS = {"pgbouncer", "schema", "connection_limit", "pool_timeout"}
 
 
 class Settings(BaseSettings):
@@ -38,6 +47,14 @@ class Settings(BaseSettings):
             v = "postgresql://" + v[len("postgres://") :]
         if v.startswith("postgresql://"):
             v = "postgresql+psycopg://" + v[len("postgresql://") :]
+
+        # Remove parâmetros de query que libpq/psycopg não conhecem
+        # (Supabase costuma anexar `?pgbouncer=true` por padrão).
+        parts = urlsplit(v)
+        if parts.query:
+            kept = [(k, val) for k, val in parse_qsl(parts.query, keep_blank_values=True)
+                    if k not in _SUPABASE_HINT_PARAMS]
+            v = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(kept), parts.fragment))
         return v
 
     @property
