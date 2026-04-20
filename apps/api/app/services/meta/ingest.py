@@ -380,14 +380,25 @@ def run_backfill(
         db.add(job); db.commit()  # visibilidade parcial
         _log.info(f"[job {job.id}] rows_written updated to {job.rows_written} after structure")
 
-        # 3) insights
-        _log.info(f"[job {job.id}] phase 3/3 — insights ({level}, {since}..{until})")
-        rows = sync_insights(
-            db, client_id=connection.client_id,
-            account_id=connection.external_account_id, token=token,
-            level=level, since=since, until=until,
-        )
-        _log.info(f"[job {job.id}] insights ingested {rows} rows")
+        # 3) insights — puxa todos os níveis necessários pro dashboard
+        # (overview usa 'account', tela de campanhas usa 'campaign', tela de ads usa 'ad').
+        # O param `level` define até qual granularidade ir (default 'ad' = todos).
+        order = ["account", "campaign", "adset", "ad"]
+        if level not in order:
+            level = "ad"
+        levels_to_sync = order[: order.index(level) + 1]
+        total_insights = 0
+        for lvl in levels_to_sync:
+            _log.info(f"[job {job.id}] phase 3 — insights level={lvl} ({since}..{until})")
+            n = sync_insights(
+                db, client_id=connection.client_id,
+                account_id=connection.external_account_id, token=token,
+                level=lvl, since=since, until=until,
+            )
+            total_insights += n
+            _log.info(f"[job {job.id}] level={lvl} ingested {n} rows")
+        rows = total_insights
+        _log.info(f"[job {job.id}] insights total {rows} rows across {len(levels_to_sync)} levels")
         job.rows_written = rows + sum(structure_counts.values())
         job.status = "done"
         job.finished_at = datetime.now(timezone.utc)
