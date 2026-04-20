@@ -207,14 +207,27 @@ def sync_structure(db: Session, *, client_id: int, account_id: str, token: str) 
 
         # ads
         _log.info("fetch+upsert ads…")
+        # Carrega sets de FK válidos pra evitar IntegrityError em loop pagination quebrada.
+        valid_adsets = {r[0] for r in db.query(MetaAdset.id).filter(MetaAdset.client_id == client_id).all()}
+        valid_creatives = {r[0] for r in db.query(MetaCreative.id).filter(MetaCreative.client_id == client_id).all()}
+        skipped_orphan_adset = 0
+
         for ad in client.fetch_ads(account_id):
+            adset_id = ad.get("adset_id")
+            if adset_id not in valid_adsets:
+                skipped_orphan_adset += 1
+                continue
             creative_id = None
             if isinstance(ad.get("creative"), dict):
                 creative_id = ad["creative"].get("id")
+            # se creative ficou de fora do paginate (loop breaker), salva sem creative
+            if creative_id and creative_id not in valid_creatives:
+                creative_id = None
+
             stmt = pg_insert(MetaAd).values(
                 id=ad["id"],
                 client_id=client_id,
-                adset_id=ad["adset_id"],
+                adset_id=adset_id,
                 creative_id=creative_id,
                 name=ad.get("name") or "",
                 status=ad.get("status"),
@@ -222,7 +235,7 @@ def sync_structure(db: Session, *, client_id: int, account_id: str, token: str) 
             ).on_conflict_do_update(
                 index_elements=["id"],
                 set_={
-                    "adset_id": ad["adset_id"],
+                    "adset_id": adset_id,
                     "creative_id": creative_id,
                     "name": ad.get("name") or "",
                     "status": ad.get("status"),
@@ -233,7 +246,10 @@ def sync_structure(db: Session, *, client_id: int, account_id: str, token: str) 
             counts["ads"] += 1
         t_ad = time.time()
         db.commit()
-        _log.info(f"ads committed: {counts['ads']} rows ({round(time.time()-t_ad,2)}s commit)")
+        _log.info(
+            f"ads committed: {counts['ads']} rows, {skipped_orphan_adset} orphan skipped "
+            f"({round(time.time()-t_ad,2)}s commit)"
+        )
 
     _log.info(f"structure done in {round(time.time()-t_start,1)}s — {counts}")
     return counts
