@@ -9,6 +9,8 @@ Motivo de não usar o SDK `facebook-business`:
 from __future__ import annotations
 
 import json
+import logging
+import sys
 import time
 from collections.abc import Iterator
 from datetime import date
@@ -17,6 +19,14 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
+
+# Logger que escreve em stdout (Railway captura stdout) com flush imediato.
+_log = logging.getLogger("meta.client")
+if not _log.handlers:
+    h = logging.StreamHandler(sys.stdout)
+    h.setFormatter(logging.Formatter("%(asctime)s [meta] %(message)s"))
+    _log.addHandler(h)
+_log.setLevel(logging.INFO)
 
 GRAPH_BASE = "https://graph.facebook.com/v22.0"
 
@@ -120,43 +130,48 @@ class MetaClient:
         except Exception:
             return 0
 
-    def _get(self, url: str, params: dict | None = None, *, retries: int = 5) -> dict:
+    def _get(self, url: str, params: dict | None = None, *, retries: int = 2) -> dict:
+        # Log da URL simplificada pra leitura (sem token).
+        short = url.split("/v22.0/")[-1] if "/v22.0/" in url else url
         merged = {**(params or {}), "access_token": self._token}
         last_err: Exception | None = None
         for attempt in range(retries + 1):
-            # throttle preventivo pra não martelar a API
             if attempt == 0:
                 time.sleep(THROTTLE_SECONDS)
+            t0 = time.time()
             try:
                 r = self._http.get(url, params=merged)
             except httpx.RequestError as e:
                 last_err = e
-                time.sleep(min(60, 2 ** attempt))
+                _log.info(f"ERR {short} (network: {e!r}) — retry {attempt+1}/{retries}")
+                time.sleep(min(30, 2 ** attempt))
                 continue
 
+            dur = round(time.time() - t0, 2)
             if r.status_code == 200:
-                return r.json()
+                data = r.json()
+                n = len(data.get("data", [])) if isinstance(data, dict) and "data" in data else 1
+                _log.info(f"OK  {short} [{dur}s, {n} rows]")
+                return data
 
-            # tenta parsear payload
             try:
                 payload = r.json()
             except Exception:
                 payload = {"error": {"message": r.text}}
 
             err_code = int((payload.get("error") or {}).get("code", 0) or 0)
+            err_msg = (payload.get("error") or {}).get("message", "")[:200]
             is_rate_limit = (
                 r.status_code in (429, 500, 502, 503, 504)
                 or err_code in RATE_LIMIT_CODES
             )
+            _log.info(f"ERR {short} [{dur}s, http={r.status_code}, code={err_code}] {err_msg}")
 
             if is_rate_limit and attempt < retries:
-                # respeita X-Business-Use-Case-Usage se o header trouxer sugestão
                 suggested_min = self._parse_bucu(r.headers.get("X-Business-Use-Case-Usage"))
-                if suggested_min > 0:
-                    sleep_for = min(suggested_min * 60, 15 * 60)  # cap 15 min
-                else:
-                    # backoff exponencial: 5s, 15s, 45s, 135s, 300s
-                    sleep_for = min(300, 5 * (3 ** attempt))
+                # Cap bem mais baixo pra não travar por horas em backoff
+                sleep_for = min(suggested_min * 60, 30) if suggested_min > 0 else min(30, 5 * (2 ** attempt))
+                _log.info(f"    retrying in {sleep_for}s (attempt {attempt+1}/{retries})")
                 time.sleep(sleep_for)
                 continue
 
