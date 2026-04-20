@@ -9,6 +9,9 @@ Todos retornam contadores para o SyncJob.
 """
 from __future__ import annotations
 
+import logging
+import sys
+import time
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Callable
@@ -22,6 +25,14 @@ from app.models.meta import (
 )
 from app.models.ops import SyncJob
 from app.services.meta.client import MetaClient
+
+# Logger próprio do ingest — separado do cliente. Prefixo "[ingest]".
+_log = logging.getLogger("meta.ingest")
+if not _log.handlers:
+    h = logging.StreamHandler(sys.stdout)
+    h.setFormatter(logging.Formatter("%(asctime)s [ingest] %(message)s"))
+    _log.addHandler(h)
+_log.setLevel(logging.INFO)
 
 
 # ─── helpers ─────────────────────────────────────────────────────────────
@@ -89,8 +100,10 @@ def sync_account_meta(db: Session, connection: AccountConnection, token: str) ->
 # ─── structure ──────────────────────────────────────────────────────────
 def sync_structure(db: Session, *, client_id: int, account_id: str, token: str) -> dict[str, int]:
     counts = {"campaigns": 0, "adsets": 0, "ads": 0, "creatives": 0}
+    t_start = time.time()
     with MetaClient(token) as client:
         # campaigns
+        _log.info("fetch+upsert campaigns…")
         for c in client.fetch_campaigns(account_id):
             stmt = pg_insert(MetaCampaign).values(
                 id=c["id"],
@@ -119,8 +132,12 @@ def sync_structure(db: Session, *, client_id: int, account_id: str, token: str) 
             )
             db.execute(stmt)
             counts["campaigns"] += 1
+        t_cp = time.time()
+        db.commit()
+        _log.info(f"campaigns committed: {counts['campaigns']} rows ({round(time.time()-t_cp,2)}s commit)")
 
         # creatives (antes dos ads, pra FK funcionar)
+        _log.info("fetch+upsert creatives…")
         for cr in client.fetch_creatives(account_id):
             stmt = pg_insert(MetaCreative).values(
                 id=cr["id"],
@@ -152,8 +169,12 @@ def sync_structure(db: Session, *, client_id: int, account_id: str, token: str) 
             )
             db.execute(stmt)
             counts["creatives"] += 1
+        t_cr = time.time()
+        db.commit()
+        _log.info(f"creatives committed: {counts['creatives']} rows ({round(time.time()-t_cr,2)}s commit)")
 
         # adsets
+        _log.info("fetch+upsert adsets…")
         for a in client.fetch_adsets(account_id):
             stmt = pg_insert(MetaAdset).values(
                 id=a["id"],
@@ -180,8 +201,12 @@ def sync_structure(db: Session, *, client_id: int, account_id: str, token: str) 
             )
             db.execute(stmt)
             counts["adsets"] += 1
+        t_as = time.time()
+        db.commit()
+        _log.info(f"adsets committed: {counts['adsets']} rows ({round(time.time()-t_as,2)}s commit)")
 
         # ads
+        _log.info("fetch+upsert ads…")
         for ad in client.fetch_ads(account_id):
             creative_id = None
             if isinstance(ad.get("creative"), dict):
@@ -206,8 +231,11 @@ def sync_structure(db: Session, *, client_id: int, account_id: str, token: str) 
             )
             db.execute(stmt)
             counts["ads"] += 1
+        t_ad = time.time()
+        db.commit()
+        _log.info(f"ads committed: {counts['ads']} rows ({round(time.time()-t_ad,2)}s commit)")
 
-    db.commit()
+    _log.info(f"structure done in {round(time.time()-t_start,1)}s — {counts}")
     return counts
 
 
@@ -320,25 +348,38 @@ def run_backfill(
     db.add(job); db.commit(); db.refresh(job)
 
     try:
+        _log.info(f"[job {job.id}] start backfill days={days} level={level}")
+
         # 1) metadata da conta
+        _log.info(f"[job {job.id}] phase 1/3 — account meta")
         sync_account_meta(db, connection, token)
+
         # 2) estrutura
+        _log.info(f"[job {job.id}] phase 2/3 — structure")
         structure_counts = sync_structure(
             db, client_id=connection.client_id,
             account_id=connection.external_account_id, token=token,
         )
+        job.rows_written = sum(structure_counts.values())
+        db.add(job); db.commit()  # visibilidade parcial
+        _log.info(f"[job {job.id}] rows_written updated to {job.rows_written} after structure")
+
         # 3) insights
+        _log.info(f"[job {job.id}] phase 3/3 — insights ({level}, {since}..{until})")
         rows = sync_insights(
             db, client_id=connection.client_id,
             account_id=connection.external_account_id, token=token,
             level=level, since=since, until=until,
         )
+        _log.info(f"[job {job.id}] insights ingested {rows} rows")
         job.rows_written = rows + sum(structure_counts.values())
         job.status = "done"
         job.finished_at = datetime.now(timezone.utc)
         connection.last_sync_at = job.finished_at
         db.add(connection)
+        _log.info(f"[job {job.id}] DONE — total {job.rows_written} rows")
     except Exception as e:
+        _log.info(f"[job {job.id}] ERROR: {type(e).__name__}: {e!s}"[:500])
         job.status = "error"
         job.error_message = str(e)[:1000]
         job.finished_at = datetime.now(timezone.utc)
