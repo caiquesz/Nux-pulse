@@ -80,9 +80,57 @@ async function get<T>(path: string): Promise<T> {
   return r.json() as Promise<T>;
 }
 
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`${r.status} ${path} — ${text.slice(0, 300)}`);
+  }
+  return r.json() as Promise<T>;
+}
+
 // ─── clients ─────────────────────────────────────────────────────────────
 export const listClients = () => get<ClientRead[]>("/api/clients");
 export const getClient = (slug: string) => get<ClientRead>(`/api/clients/${slug}`);
+
+export type ClientCreatePayload = {
+  slug: string;
+  name: string;
+  accent_color?: string | null;
+  monthly_budget?: number | null;
+  monthly_revenue_goal?: number | null;
+  logo_url?: string | null;
+};
+export const createClient = (body: ClientCreatePayload) =>
+  post<ClientRead>("/api/clients", body);
+
+// ─── connections ─────────────────────────────────────────────────────────
+export type ConnectionRead = {
+  id: number;
+  client_id: number;
+  platform: "meta" | "google" | string;
+  external_account_id: string;
+  display_name: string | null;
+  status: string;
+  last_sync_at: string | null;
+  last_error: string | null;
+};
+
+export const listConnections = (slug: string) =>
+  get<ConnectionRead[]>(`/api/clients/${slug}/connections`);
+
+export type MetaConnectionPayload = {
+  external_account_id: string;
+  display_name?: string | null;
+  system_user_token: string;
+};
+export const createMetaConnection = (slug: string, body: MetaConnectionPayload) =>
+  post<ConnectionRead>(`/api/clients/${slug}/connections/meta`, body);
 
 // ─── meta insights ───────────────────────────────────────────────────────
 export type RangeOpts = { days?: number; since?: string; until?: string };
