@@ -480,16 +480,51 @@ def meta_creatives(
 
 # ─── Funil ──────────────────────────────────────────────────────────────
 # Agregamos o campo `actions` (JSONB) das linhas de insights por action_type.
-# Os action_types vêm da própria Meta — ex: link_click, landing_page_view,
-# add_to_cart, initiate_checkout, purchase, lead, complete_registration.
-FUNNEL_STAGES = [
-    ("impressions",        "Impressões"),
-    ("link_click",         "Cliques no link"),
-    ("landing_page_view",  "LP views"),
-    ("add_to_cart",        "Add ao carrinho"),
-    ("initiate_checkout",  "Checkout iniciado"),
-    ("purchase",           "Compras"),
+# Cada etapa define uma lista de chaves candidatas em ordem de preferência:
+# Meta reporta o mesmo evento sob vários rótulos (purchase, omni_purchase,
+# onsite_conversion.purchase…) e somar duplica. Pegamos o primeiro candidato
+# que a conta reporta — mesmo pattern usado em _pick_first dos KPIs.
+FUNNEL_STAGES: list[dict] = [
+    {"key": "impressions",       "label": "Impressões",        "direct": True},
+    {"key": "link_click",        "label": "Cliques no link",   "candidates": ("link_click",)},
+    {"key": "landing_page_view", "label": "LP views",          "candidates": (
+        "landing_page_view",
+        "omni_landing_page_view",
+        "offsite_conversion.fb_pixel_view_content",
+    )},
+    {"key": "add_to_cart",       "label": "Add ao carrinho",   "candidates": (
+        "add_to_cart",
+        "omni_add_to_cart",
+        "offsite_conversion.fb_pixel_add_to_cart",
+        "onsite_conversion.add_to_cart",
+    )},
+    {"key": "initiate_checkout", "label": "Checkout iniciado", "candidates": (
+        "initiate_checkout",
+        "omni_initiated_checkout",
+        "offsite_conversion.fb_pixel_initiate_checkout",
+        "onsite_conversion.initiate_checkout",
+    )},
+    {"key": "purchase",          "label": "Compras",           "candidates": PURCHASE_TYPES_RANKED},
 ]
+
+_ALL_FUNNEL_KEYS = {s["key"] for s in FUNNEL_STAGES} | {
+    k for s in FUNNEL_STAGES for k in s.get("candidates", ())
+}
+
+
+def _first_total(totals: dict[str, float], candidates: tuple[str, ...]) -> float:
+    """Retorna o total do primeiro action_type presente (em ordem de preferência).
+
+    Espelha _pick_first usado em KPIs — evita duplicação quando a Meta reporta
+    o mesmo evento em chaves distintas (purchase/omni_purchase/onsite_*).
+    """
+    for k in candidates:
+        if k in totals:
+            try:
+                return float(totals[k])
+            except (TypeError, ValueError):
+                continue
+    return 0.0
 
 
 @router.get("/{slug}/meta/funnel")
@@ -520,12 +555,16 @@ def meta_funnel(
         for k, v in (r.actions or {}).items():
             totals[k] = totals.get(k, 0) + float(v or 0)
 
-    # monta as etapas na ordem do funil
+    # monta as etapas na ordem do funil — usa fallback ranking pra resolver
+    # chaves canônicas por etapa.
     out = []
     prev_val = None
-    for key, label in FUNNEL_STAGES:
-        v = int(totals.get(key, 0) or 0)
-        step = {"key": key, "label": label, "value": v, "conversion_from_prev": None}
+    for stage in FUNNEL_STAGES:
+        if stage.get("direct"):
+            v = int(totals.get(stage["key"], 0) or 0)
+        else:
+            v = int(_first_total(totals, stage["candidates"]) or 0)
+        step = {"key": stage["key"], "label": stage["label"], "value": v, "conversion_from_prev": None}
         if prev_val and prev_val > 0:
             step["conversion_from_prev"] = round(v / prev_val * 100, 2)
         out.append(step)
@@ -533,7 +572,7 @@ def meta_funnel(
 
     # action types que vieram da Meta mas não entraram no funil padrão
     other = {k: int(v) for k, v in totals.items()
-             if k != "impressions" and k not in {s[0] for s in FUNNEL_STAGES} and v}
+             if k != "impressions" and k not in _ALL_FUNNEL_KEYS and v}
     return {
         "client": slug,
         "period_days": (until_d - since_d).days + 1,
