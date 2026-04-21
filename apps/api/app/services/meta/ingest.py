@@ -260,6 +260,10 @@ def _row_to_insight_values(
     row: dict, *, client_id: int, level: str,
     breakdown_key: str, breakdown_value: str | None,
 ) -> dict:
+    # Postgres trata NULL como distinto em unique constraint — se breakdown_value
+    # for None, cada INSERT cria nova linha em vez de UPSERT. Força "" pra que o
+    # on_conflict funcione e não haja duplicata.
+    breakdown_value = breakdown_value if breakdown_value not in (None, "") else ""
     # Identifica o object_id pelo nível
     obj_id = {
         "account":  row.get("account_id"),

@@ -128,6 +128,20 @@ def diagnose_meta(slug: str, db: Session = Depends(get_db)):
         }
 
 
+@router.post("/meta/{slug}/wipe-insights")
+def wipe_meta_insights(slug: str, db: Session = Depends(get_db)):
+    """Deleta todas as linhas de meta_insights_daily do cliente.
+    Útil pra limpar dados duplicados por rodadas antigas de backfill antes do fix
+    do NULL-distinct. Depois, chame /backfill pra repopular limpo."""
+    from app.models.meta import MetaInsightsDaily
+    c = db.query(Client).filter(Client.slug == slug).first()
+    if not c:
+        raise HTTPException(404, "client not found")
+    deleted = db.query(MetaInsightsDaily).filter(MetaInsightsDaily.client_id == c.id).delete()
+    db.commit()
+    return {"deleted_rows": deleted, "client": slug}
+
+
 @router.post("/jobs/cleanup-stale")
 def cleanup_stale_jobs(max_age_minutes: int = 15, db: Session = Depends(get_db)):
     """Marca como 'error' os jobs que ficaram em 'running' por mais de `max_age_minutes`.
