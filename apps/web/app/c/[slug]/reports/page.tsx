@@ -387,12 +387,67 @@ export default function ReportsPage() {
 
       <style jsx global>{`
         @media print {
-          .no-print, .app-sidebar, .app-topbar, nav, .sb-badge { display: none !important; }
-          body, .app-main { background: white !important; }
-          .report-doc { border: none !important; padding: 0 !important; max-width: 100% !important; margin: 0 !important; }
-          .report-hero { border-radius: 0 !important; }
-          section { break-inside: avoid; }
-          .report-doc > div:last-child { border-radius: 0 !important; border: none !important; }
+          /* 1. Preservar cores (sem isso navegador ignora backgrounds no PDF) */
+          *, *::before, *::after {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+
+          /* 2. Esconder chrome da app (sidebar, topbar, header da pagina) */
+          .sidebar,
+          .topbar,
+          .page-head,
+          .no-print,
+          .sb-badge,
+          nav,
+          aside.sidebar {
+            display: none !important;
+          }
+
+          /* 3. Reset do layout pra ocupar pagina inteira */
+          html, body {
+            background: #fff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .app {
+            display: block !important;
+          }
+          .main, .page {
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+          }
+          .app[data-sidebar] {
+            grid-template-columns: 1fr !important;
+          }
+
+          /* 4. Documento do relatorio preenche a pagina */
+          .report-doc {
+            border: none !important;
+            padding: 0 !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+          }
+          .report-doc > section:first-child,
+          .report-hero {
+            border-radius: 0 !important;
+          }
+          .report-doc > div:last-child {
+            border: none !important;
+            border-radius: 0 !important;
+          }
+
+          /* 5. Evitar quebra de pagina dentro de secoes */
+          section { break-inside: avoid; page-break-inside: avoid; }
+
+          /* 6. Ajustes de pagina A4 */
+          @page {
+            size: A4;
+            margin: 12mm 10mm;
+          }
         }
       `}</style>
     </>
