@@ -34,6 +34,61 @@ def _window(days: int, since: str | None = None, until: str | None = None) -> tu
     return u - timedelta(days=days), u
 
 
+# Mapa de action_types → "bucket" lógico. A Meta manda vários tipos diferentes
+# dependendo do objetivo/configuração da campanha; consolidamos em 3 conceitos.
+MESSAGE_TYPES = {
+    "onsite_conversion.messaging_first_reply",
+    "onsite_conversion.messaging_conversation_started_7d",
+    "onsite_conversion.total_messaging_connection",
+}
+LEAD_TYPES = {
+    "lead",
+    "onsite_conversion.lead_grouped",
+    "offsite_conversion.fb_pixel_lead",
+    "leadgen.other",
+}
+PURCHASE_TYPES = {
+    "purchase",
+    "omni_purchase",
+    "offsite_conversion.fb_pixel_purchase",
+    "onsite_web_purchase",
+    "web_in_store_purchase",
+}
+
+
+def _sum_action_bucket(actions: dict | None, keys: set[str]) -> float:
+    if not actions:
+        return 0.0
+    # soma tanto por key exata quanto por prefix ("messaging*")
+    total = 0.0
+    for k, v in actions.items():
+        if k in keys:
+            try:
+                total += float(v)
+            except (TypeError, ValueError):
+                pass
+    return total
+
+
+def _aggregate_conversions(rows: list) -> dict:
+    """Recebe rows com .actions e .action_values, retorna totais de messages/leads/purchases/revenue."""
+    messages = leads = purchases = 0.0
+    revenue = 0.0
+    for r in rows:
+        acts = r.actions if hasattr(r, "actions") else None
+        vals = r.action_values if hasattr(r, "action_values") else None
+        messages += _sum_action_bucket(acts, MESSAGE_TYPES)
+        leads += _sum_action_bucket(acts, LEAD_TYPES)
+        purchases += _sum_action_bucket(acts, PURCHASE_TYPES)
+        revenue += _sum_action_bucket(vals, PURCHASE_TYPES)
+    return {
+        "messages": int(round(messages)),
+        "leads": int(round(leads)),
+        "purchases": int(round(purchases)),
+        "revenue": round(revenue, 2),
+    }
+
+
 @router.get("/{slug}/meta/overview")
 def meta_overview(
     slug: str,
@@ -67,6 +122,25 @@ def meta_overview(
     clks = int(agg.clicks or 0)
     ctr = (clks / imps * 100) if imps else 0
     cpc = (spend / clks) if clks else 0
+
+    # Conversions (messages/leads/purchases/revenue) vêm do JSONB actions/action_values.
+    conv_rows = (
+        db.query(MetaInsightsDaily.actions, MetaInsightsDaily.action_values)
+        .filter(
+            MetaInsightsDaily.client_id == c.id,
+            MetaInsightsDaily.level == "account",
+            MetaInsightsDaily.breakdown_key == "none",
+            MetaInsightsDaily.date >= since,
+            MetaInsightsDaily.date <= until,
+        )
+        .all()
+    )
+    conv = _aggregate_conversions(conv_rows)
+    roas = round(conv["revenue"] / spend, 4) if spend > 0 else 0.0
+    cost_per_msg = round(spend / conv["messages"], 2) if conv["messages"] else 0.0
+    cost_per_lead = round(spend / conv["leads"], 2) if conv["leads"] else 0.0
+    cost_per_purchase = round(spend / conv["purchases"], 2) if conv["purchases"] else 0.0
+
     return {
         "client": slug,
         "platform": "meta",
@@ -79,6 +153,14 @@ def meta_overview(
         "reach": int(agg.reach or 0),
         "ctr": round(ctr, 4),
         "cpc": round(cpc, 4),
+        "messages": conv["messages"],
+        "leads": conv["leads"],
+        "purchases": conv["purchases"],
+        "revenue": conv["revenue"],
+        "roas": roas,
+        "cost_per_message": cost_per_msg,
+        "cost_per_lead": cost_per_lead,
+        "cost_per_purchase": cost_per_purchase,
     }
 
 
@@ -680,12 +762,15 @@ def meta_insights_daily(
     c = _client_or_404(db, slug)
     since_d, until_d = _window(days, since, until)
     since, until = since_d, until_d
+    # Pega rows cruas pra poder extrair actions/action_values por dia
     rows = (
         db.query(
             MetaInsightsDaily.date,
-            func.sum(MetaInsightsDaily.spend).label("spend"),
-            func.sum(MetaInsightsDaily.impressions).label("impressions"),
-            func.sum(MetaInsightsDaily.clicks).label("clicks"),
+            MetaInsightsDaily.spend,
+            MetaInsightsDaily.impressions,
+            MetaInsightsDaily.clicks,
+            MetaInsightsDaily.actions,
+            MetaInsightsDaily.action_values,
         )
         .filter(
             MetaInsightsDaily.client_id == c.id,
@@ -694,18 +779,36 @@ def meta_insights_daily(
             MetaInsightsDaily.date >= since,
             MetaInsightsDaily.date <= until,
         )
-        .group_by(MetaInsightsDaily.date)
         .order_by(MetaInsightsDaily.date.asc())
         .all()
     )
+    # como level=account tem 1 row por dia, agrupar é redundante, mas mantemos suporte caso mude
+    by_day: dict[date, dict] = {}
+    for r in rows:
+        d = by_day.setdefault(r.date, {"spend": 0.0, "impressions": 0, "clicks": 0, "actions_rows": [], "values_rows": []})
+        d["spend"] += float(r.spend or 0)
+        d["impressions"] += int(r.impressions or 0)
+        d["clicks"] += int(r.clicks or 0)
+        d["actions_rows"].append(type("X", (), {"actions": r.actions, "action_values": r.action_values}))
+
+    series = []
+    for dt in sorted(by_day.keys()):
+        b = by_day[dt]
+        conv = _aggregate_conversions(b["actions_rows"])
+        series.append({
+            "date": dt.isoformat(),
+            "spend": round(b["spend"], 2),
+            "impressions": b["impressions"],
+            "clicks": b["clicks"],
+            "messages": conv["messages"],
+            "leads": conv["leads"],
+            "purchases": conv["purchases"],
+            "revenue": conv["revenue"],
+        })
     return {
         "client": slug,
         "period_days": (until_d - since_d).days + 1,
         "since": since_d.isoformat(),
         "until": until_d.isoformat(),
-        "series": [
-            {"date": r.date.isoformat(), "spend": float(r.spend or 0),
-             "impressions": int(r.impressions or 0), "clicks": int(r.clicks or 0)}
-            for r in rows
-        ],
+        "series": series,
     }

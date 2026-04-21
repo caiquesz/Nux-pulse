@@ -23,6 +23,15 @@ export type MetaOverview = {
   reach: number;
   ctr: number;
   cpc: number;
+  // Conversões
+  messages: number;
+  leads: number;
+  purchases: number;
+  revenue: number;
+  roas: number;
+  cost_per_message: number;
+  cost_per_lead: number;
+  cost_per_purchase: number;
 };
 
 export type MetaCampaignRow = {
@@ -49,6 +58,10 @@ export type MetaDailyPoint = {
   spend: number;
   impressions: number;
   clicks: number;
+  messages: number;
+  leads: number;
+  purchases: number;
+  revenue: number;
 };
 
 export type MetaDailyResponse = {

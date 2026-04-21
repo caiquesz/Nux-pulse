@@ -92,6 +92,19 @@ export function Overview() {
   const kpis = useMemo(() => buildKpis(overviewQ.data), [overviewQ.data]);
   const series = useMemo(() => (dailyQ.data?.series ?? []).map((p) => p.spend), [dailyQ.data]);
 
+  // Escolhe a melhor métrica de conversão pra overlay no gráfico.
+  // Prioridade: compras > leads > mensagens. Se nada, não mostra.
+  const overlay = useMemo(() => {
+    const rows = dailyQ.data?.series ?? [];
+    const totalPurchases = rows.reduce((s, p) => s + (p.purchases || 0), 0);
+    const totalLeads = rows.reduce((s, p) => s + (p.leads || 0), 0);
+    const totalMsgs = rows.reduce((s, p) => s + (p.messages || 0), 0);
+    if (totalPurchases > 0) return { label: "Compras", values: rows.map((p) => p.purchases) };
+    if (totalLeads > 0) return { label: "Leads", values: rows.map((p) => p.leads) };
+    if (totalMsgs > 0) return { label: "Mensagens", values: rows.map((p) => p.messages) };
+    return null;
+  }, [dailyQ.data]);
+
   const loading = overviewQ.isLoading || campaignsQ.isLoading || dailyQ.isLoading;
   const error = overviewQ.error || campaignsQ.error || dailyQ.error;
 
@@ -191,12 +204,20 @@ export function Overview() {
                 : "Os insights diários aparecem aqui após o próximo backfill"}
             </div>
           </div>
-          <span className="tag lime mono">● LIVE · META ADS</span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {overlay && (
+              <span className="tag mono" style={{ background: "rgba(234,231,223,0.08)", color: "rgba(234,231,223,0.7)" }}>
+                ·  ·  {overlay.label.toLowerCase()}
+              </span>
+            )}
+            <span className="tag lime mono">● LIVE · META ADS</span>
+          </div>
         </div>
         <div style={{ marginTop: 20, position: "relative", zIndex: 1 }}>
           {series.length > 1 ? (
             <BigChart
               series={series}
+              compare={overlay?.values}
               height={220}
               lineColor="var(--lime)"
               fillColor="oklch(0.90 0.22 125 / 0.18)"
@@ -278,20 +299,40 @@ function buildKpis(o: MetaOverview | undefined): Kpi[] {
   if (!o) {
     return [
       { label: "Investimento", value: "—" },
+      { label: "Mensagens", value: "—" },
+      { label: "Leads", value: "—" },
+      { label: "Compras", value: "—" },
+      { label: "ROAS", value: "—" },
       { label: "Impressões", value: "—" },
       { label: "Cliques", value: "—" },
-      { label: "Alcance", value: "—" },
       { label: "CTR", value: "—" },
-      { label: "CPC médio", value: "—" },
     ];
   }
+
+  // ROAS display: formato "3.2x" quando há receita; "—" quando spend=0
+  const roasLabel = o.roas > 0 ? `${o.roas.toFixed(2)}x` : (o.spend > 0 ? "—" : "—");
+
   return [
     { label: "Investimento", value: fmtBRL(o.spend) },
+    {
+      label: o.messages > 0 ? `Mensagens · R$${o.cost_per_message.toFixed(2)}/msg` : "Mensagens",
+      value: fmtIntCompact(o.messages),
+    },
+    {
+      label: o.leads > 0 ? `Leads · R$${o.cost_per_lead.toFixed(2)}/lead` : "Leads",
+      value: fmtIntCompact(o.leads),
+    },
+    {
+      label: o.purchases > 0 ? `Compras · R$${o.cost_per_purchase.toFixed(2)}/compra` : "Compras",
+      value: fmtIntCompact(o.purchases),
+    },
+    {
+      label: o.revenue > 0 ? `ROAS · ${fmtBRL(o.revenue)} receita` : "ROAS",
+      value: roasLabel,
+    },
     { label: "Impressões", value: fmtIntCompact(o.impressions) },
     { label: "Cliques", value: fmtIntCompact(o.clicks) },
-    { label: "Alcance", value: fmtIntCompact(o.reach) },
     { label: "CTR", value: fmtPct(o.ctr) },
-    { label: "CPC médio", value: fmtBRL(o.cpc) },
   ];
 }
 
