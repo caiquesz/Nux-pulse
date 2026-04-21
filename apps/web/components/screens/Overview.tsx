@@ -91,6 +91,15 @@ export function Overview() {
 
   const kpis = useMemo(() => buildKpis(overviewQ.data, dailyQ.data), [overviewQ.data, dailyQ.data]);
   const series = useMemo(() => (dailyQ.data?.series ?? []).map((p) => p.spend), [dailyQ.data]);
+  // Labels curtos "dd/mm" pra cada ponto — usados no tooltip dos sparklines.
+  const dateLabels = useMemo(
+    () =>
+      (dailyQ.data?.series ?? []).map((p) => {
+        const [, mm, dd] = p.date.split("-");
+        return `${dd}/${mm}`;
+      }),
+    [dailyQ.data],
+  );
 
   // Escolhe a melhor métrica de conversão pra overlay no gráfico.
   // Prioridade: compras > leads > mensagens. Se nada, não mostra.
@@ -175,9 +184,14 @@ export function Overview() {
               <div className="stat-delta">
                 <span className="dim">vs. período ant.</span>
               </div>
-              {k.series.length > 0 && (
+              {k.series.length > 1 && (
                 <div className="stat-spark">
-                  <Sparkline series={k.series.length > 1 ? k.series : [0, 0]} height={36} />
+                  <Sparkline
+                    series={k.series}
+                    labels={dateLabels}
+                    format={k.format}
+                    height={36}
+                  />
                 </div>
               )}
             </div>
@@ -293,20 +307,28 @@ export function Overview() {
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────
-type Kpi = { label: string; value: string; unit: string; delta: number; series: number[] };
+type Kpi = {
+  label: string;
+  value: string;
+  unit: string;
+  delta: number;
+  series: number[];
+  format: (v: number) => string;
+};
 
 function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[] {
   const emptySeries: number[] = [];
+  const noFmt = (v: number) => v.toLocaleString("pt-BR");
   if (!o) {
     return [
-      { label: "Investimento", value: "—", unit: "BRL", delta: 0, series: emptySeries },
-      { label: "Mensagens", value: "—", unit: "", delta: 0, series: emptySeries },
-      { label: "Leads", value: "—", unit: "", delta: 0, series: emptySeries },
-      { label: "Compras", value: "—", unit: "", delta: 0, series: emptySeries },
-      { label: "ROAS", value: "—", unit: "x", delta: 0, series: emptySeries },
-      { label: "Impressões", value: "—", unit: "", delta: 0, series: emptySeries },
-      { label: "Cliques", value: "—", unit: "", delta: 0, series: emptySeries },
-      { label: "CTR", value: "—", unit: "%", delta: 0, series: emptySeries },
+      { label: "Investimento", value: "—", unit: "BRL", delta: 0, series: emptySeries, format: fmtBRL },
+      { label: "Mensagens", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
+      { label: "Leads", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
+      { label: "Compras", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
+      { label: "ROAS", value: "—", unit: "x", delta: 0, series: emptySeries, format: (v) => v.toFixed(2) + "x" },
+      { label: "Impressões", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
+      { label: "Cliques", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
+      { label: "CTR", value: "—", unit: "%", delta: 0, series: emptySeries, format: (v) => fmtPct(v) },
     ];
   }
 
@@ -317,6 +339,14 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
   const purchaseSeries = series.map((p) => p.purchases);
   const impSeries = series.map((p) => p.impressions);
   const clkSeries = series.map((p) => p.clicks);
+  // ROAS diário = revenue/spend por dia. Só mostra se há receita agregada;
+  // do contrário, série vazia (esconde sparkline — não finge dado que não existe).
+  const totalRevenue = series.reduce((s, p) => s + (p.revenue || 0), 0);
+  const roasSeries: number[] = totalRevenue > 0
+    ? series.map((p) => (p.spend > 0 ? (p.revenue || 0) / p.spend : 0))
+    : [];
+  // CTR diário real (clicks/impressions * 100), não usa impSeries como proxy.
+  const ctrSeries = series.map((p) => (p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0));
 
   const d = o.deltas;
   const roasLabel = o.roas > 0 ? `${o.roas.toFixed(2)}x` : "—";
@@ -328,6 +358,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       unit: "BRL",
       delta: d.spend ?? 0,
       series: spendSeries,
+      format: fmtBRL,
     },
     {
       label: o.messages > 0 ? `Mensagens · R$${o.cost_per_message.toFixed(2)}/msg` : "Mensagens",
@@ -335,6 +366,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       unit: "",
       delta: d.messages ?? 0,
       series: msgSeries,
+      format: (v) => fmtIntCompact(Math.round(v)),
     },
     {
       label: o.leads > 0 ? `Leads · R$${o.cost_per_lead.toFixed(2)}/lead` : "Leads",
@@ -342,6 +374,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       unit: "",
       delta: d.leads ?? 0,
       series: leadSeries,
+      format: (v) => Math.round(v).toLocaleString("pt-BR"),
     },
     {
       label: o.purchases > 0 ? `Compras · R$${o.cost_per_purchase.toFixed(2)}/compra` : "Compras",
@@ -349,13 +382,15 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       unit: "",
       delta: d.purchases ?? 0,
       series: purchaseSeries,
+      format: (v) => Math.round(v).toLocaleString("pt-BR"),
     },
     {
       label: o.revenue > 0 ? `ROAS · ${fmtBRL(o.revenue)} receita` : "ROAS",
       value: roasLabel,
       unit: "x",
       delta: d.roas ?? 0,
-      series: purchaseSeries, // sem série própria pra ROAS; reaproveita compras
+      series: roasSeries, // vazio quando não há receita → sparkline escondido
+      format: (v) => v.toFixed(2) + "x",
     },
     {
       label: "Impressões",
@@ -363,6 +398,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       unit: "",
       delta: d.impressions ?? 0,
       series: impSeries,
+      format: (v) => fmtIntCompact(Math.round(v)),
     },
     {
       label: "Cliques",
@@ -370,13 +406,15 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       unit: "",
       delta: d.clicks ?? 0,
       series: clkSeries,
+      format: (v) => fmtIntCompact(Math.round(v)),
     },
     {
       label: "CTR",
       value: fmtPct(o.ctr),
       unit: "%",
       delta: d.ctr ?? 0,
-      series: impSeries, // aprox. usa impressões como proxy de atividade
+      series: ctrSeries,
+      format: (v) => fmtPct(v),
     },
   ];
 }
