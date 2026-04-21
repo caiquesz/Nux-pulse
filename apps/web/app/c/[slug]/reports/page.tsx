@@ -55,13 +55,15 @@ export default function ReportsPage() {
   const spendSeries = useMemo(() => series.map((s) => s.spend), [series]);
   const convSeries = useMemo(() => {
     if (!primaryConversion) return [];
-    return series.map((s) => Number((s as Record<string, unknown>)[primaryConversion.key]) || 0);
+    const k = primaryConversion.key as "purchases" | "leads" | "messages";
+    return series.map((s) => Number(s[k] ?? 0));
   }, [series, primaryConversion]);
   const dateLabels = useMemo(() => series.map((s) => s.date.slice(5).replace("-", "/")), [series]);
 
   // Deltas vs. período anterior — vêm do overview (já calculados no backend)
-  const deltaConv = ov?.deltas?.[primaryConversion?.key ?? "purchases"];
-  const deltaSpend = ov?.deltas?.spend;
+  const convKey = (primaryConversion?.key ?? "purchases") as "purchases" | "leads" | "messages";
+  const deltaConv = ov?.deltas?.[convKey] ?? null;
+  const deltaSpend = ov?.deltas?.spend ?? null;
 
   const acctAlerts = (alerts.data?.alerts ?? []).filter((a) => a.severity !== "info").slice(0, 3);
 
