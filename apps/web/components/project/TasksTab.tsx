@@ -1,6 +1,6 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   createTask, deleteTask, listTasks, listTeam, updateTask,
@@ -83,6 +83,7 @@ export function TasksTab({ slug }: { slug: string }) {
   const [period, setPeriod] = useState<PeriodFilter>("all");
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Task | null>(null);
 
   const tasksQ = useQuery({ queryKey: ["tasks", slug, filters], queryFn: () => listTasks(slug, filters), enabled: !!slug });
   const teamQ = useQuery({ queryKey: ["team"], queryFn: () => listTeam() });
@@ -122,6 +123,13 @@ export function TasksTab({ slug }: { slug: string }) {
   const updateMut = useMutation({
     mutationFn: ({ id, patch }: { id: number; patch: Partial<TaskCreate> }) => updateTask(id, patch),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks", slug] }),
+  });
+  const editMut = useMutation({
+    mutationFn: ({ id, patch }: { id: number; patch: Partial<TaskCreate> }) => updateTask(id, patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks", slug] });
+      setEditing(null);
+    },
   });
   const deleteMut = useMutation({
     mutationFn: (id: number) => deleteTask(id),
@@ -186,15 +194,27 @@ export function TasksTab({ slug }: { slug: string }) {
         totals={tasksQ.data ?? []}
       />
 
-      {showForm && (
+      {showForm && !editing && (
         <div style={{ margin: "16px 0 20px" }}>
           <NewTaskForm
             team={teamQ.data ?? []}
             onSubmit={(body) => createMut.mutate(body)}
+            onCancel={() => setShowForm(false)}
             submitting={createMut.isPending}
             error={createMut.error ? (createMut.error as Error).message : null}
           />
         </div>
+      )}
+
+      {editing && (
+        <TaskEditModal
+          task={editing}
+          team={teamQ.data ?? []}
+          onSubmit={(patch) => editMut.mutate({ id: editing.id, patch })}
+          onCancel={() => setEditing(null)}
+          submitting={editMut.isPending}
+          error={editMut.error ? (editMut.error as Error).message : null}
+        />
       )}
 
       {/* ── Conteúdo ────────────────────────────────────────────────── */}
@@ -228,6 +248,11 @@ export function TasksTab({ slug }: { slug: string }) {
                 team={teamQ.data ?? []}
                 onChangeStatus={(status) => updateMut.mutate({ id: t.id, patch: { status } })}
                 onChangeAssignee={(assignee_id) => updateMut.mutate({ id: t.id, patch: { assignee_id } })}
+                onToggleDone={() => {
+                  const next: TaskStatus = t.status === "done" ? "todo" : "done";
+                  updateMut.mutate({ id: t.id, patch: { status: next } });
+                }}
+                onEdit={() => { setShowForm(false); setEditing(t); }}
                 onDelete={() => {
                   if (confirm(`Excluir "${t.title}"?`)) deleteMut.mutate(t.id);
                 }}
@@ -410,16 +435,17 @@ function Section({ group, children }: { group: Group; children: React.ReactNode 
 // ──────────────────────────────────────────────────────────────────────
 
 function TaskCard({
-  task, team, onChangeStatus, onChangeAssignee, onDelete,
+  task, team, onChangeStatus, onChangeAssignee, onToggleDone, onEdit, onDelete,
 }: {
   task: Task;
   team: { id: number; name: string; avatar_color: string | null }[];
   onChangeStatus: (s: TaskStatus) => void;
   onChangeAssignee: (id: number | null) => void;
+  onToggleDone: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const [hover, setHover] = useState(false);
-  const statusCfg = STATUS[task.status];
   const priCfg = PRIORITY[task.priority];
   const platformCfg = task.platform ? PLATFORM[task.platform] : null;
   const typeCfg = task.task_type ? TASK_TYPE[task.task_type] : null;
@@ -437,19 +463,24 @@ function TaskCard({
         display: "grid",
         gridTemplateColumns: "3px auto 1fr auto auto auto",
         gap: 12, alignItems: "center",
-        padding: "10px 14px 10px 0",
+        padding: "12px 14px 12px 0",
         borderRadius: 8,
         background: hover ? "var(--hover)" : "var(--surface)",
         border: "1px solid var(--border)",
-        transition: "background .08s",
-        opacity: isDone ? 0.65 : 1,
+        transition: "background .08s, border-color .08s",
+        opacity: isDone ? 0.58 : 1,
       }}
     >
       {/* Faixa de prioridade */}
       <div style={{ width: 3, alignSelf: "stretch", background: priCfg.color, borderRadius: "8px 0 0 8px" }} />
 
-      {/* Platform + Type (esquerda) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 10 }}>
+      {/* Checkbox + Platform (esquerda) */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 12 }}>
+        <Checkbox
+          checked={isDone}
+          onToggle={onToggleDone}
+          title={isDone ? "Reabrir tarefa" : "Marcar como concluída"}
+        />
         {platformCfg && (
           <span
             title={platformCfg.label}
@@ -539,22 +570,76 @@ function TaskCard({
       />
 
       {/* Status + actions */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         <StatusMenu current={task.status} onChange={onChangeStatus} />
+        <button
+          onClick={onEdit}
+          title="Editar tarefa"
+          aria-label="Editar tarefa"
+          style={{
+            background: "transparent", border: "none",
+            color: hover ? "var(--ink-3)" : "transparent",
+            cursor: "pointer", fontSize: 12, padding: "6px 7px",
+            borderRadius: 5, transition: "color .08s, background .08s",
+            lineHeight: 1,
+          }}
+          onMouseEnter={(e) => { if (hover) { e.currentTarget.style.background = "var(--surface-2)"; e.currentTarget.style.color = "var(--ink)"; } }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = hover ? "var(--ink-3)" : "transparent"; }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+          </svg>
+        </button>
         <button
           onClick={onDelete}
           title="Excluir"
+          aria-label="Excluir tarefa"
           style={{
             background: "transparent", border: "none",
             color: hover ? "var(--ink-4)" : "transparent",
-            cursor: "pointer", fontSize: 12, padding: "4px 6px",
-            transition: "color .08s",
+            cursor: "pointer", fontSize: 13, padding: "6px 7px",
+            borderRadius: 5, transition: "color .08s, background .08s",
+            lineHeight: 1,
           }}
         >
           ✕
         </button>
       </div>
     </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+//  CHECKBOX (custom, sem estilo default do browser)
+// ──────────────────────────────────────────────────────────────────────
+
+function Checkbox({ checked, onToggle, title }: { checked: boolean; onToggle: () => void; title?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      role="checkbox"
+      aria-checked={checked}
+      title={title}
+      style={{
+        width: 18, height: 18, borderRadius: 5,
+        border: `1.5px solid ${checked ? "var(--pos)" : "var(--border-2)"}`,
+        background: checked ? "var(--pos)" : "transparent",
+        cursor: "pointer", padding: 0,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        transition: "background .12s, border-color .12s",
+        flexShrink: 0,
+      }}
+      onMouseEnter={(e) => { if (!checked) e.currentTarget.style.borderColor = "var(--ink-2)"; }}
+      onMouseLeave={(e) => { if (!checked) e.currentTarget.style.borderColor = "var(--border-2)"; }}
+    >
+      {checked && (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      )}
+    </button>
   );
 }
 
@@ -731,22 +816,25 @@ function AssigneePicker({
 // ──────────────────────────────────────────────────────────────────────
 
 function NewTaskForm({
-  team, onSubmit, submitting, error,
+  team, onSubmit, onCancel, submitting, error, initial, submitLabel = "Criar tarefa",
 }: {
   team: { id: number; name: string; avatar_color: string | null }[];
   onSubmit: (body: TaskCreate) => void;
+  onCancel?: () => void;
   submitting: boolean;
   error: string | null;
+  initial?: Task;
+  submitLabel?: string;
 }) {
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [dueISO, setDueISO] = useState<string | null>(null);
-  const [priority, setPriority] = useState<TaskPriority>("media");
-  const [platform, setPlatform] = useState<TaskPlatform | "">("");
-  const [taskType, setTaskType] = useState<TaskType | "">("");
-  const [assigneeId, setAssigneeId] = useState<number | "">("");
-  const [durationMin, setDurationMin] = useState<string>("");
-  const [aiScheduled, setAiScheduled] = useState(false);
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [dueISO, setDueISO] = useState<string | null>(initial?.due_at ?? null);
+  const [priority, setPriority] = useState<TaskPriority>((initial?.priority as TaskPriority) ?? "media");
+  const [platform, setPlatform] = useState<TaskPlatform | "">((initial?.platform as TaskPlatform) ?? "");
+  const [taskType, setTaskType] = useState<TaskType | "">((initial?.task_type as TaskType) ?? "");
+  const [assigneeId, setAssigneeId] = useState<number | "">(initial?.assignee_id ?? "");
+  const [durationMin, setDurationMin] = useState<string>(initial?.duration_min ? String(initial.duration_min) : "");
+  const [aiScheduled, setAiScheduled] = useState(initial?.ai_scheduled ?? false);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -842,12 +930,86 @@ function NewTaskForm({
         {error && <div style={{ color: "var(--neg)", fontSize: 12 }}>{error}</div>}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          {onCancel && (
+            <button type="button" className="btn ghost" onClick={onCancel} disabled={submitting}>
+              Cancelar
+            </button>
+          )}
           <button type="submit" className="btn" disabled={submitting || !title.trim()}>
-            {submitting ? "Salvando…" : "Criar tarefa"}
+            {submitting ? "Salvando…" : submitLabel}
           </button>
         </div>
       </div>
     </form>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+//  EDIT MODAL — overlay centralizado com o mesmo form pré-preenchido
+// ──────────────────────────────────────────────────────────────────────
+
+function TaskEditModal({
+  task, team, onSubmit, onCancel, submitting, error,
+}: {
+  task: Task;
+  team: { id: number; name: string; avatar_color: string | null }[];
+  onSubmit: (patch: Partial<TaskCreate>) => void;
+  onCancel: () => void;
+  submitting: boolean;
+  error: string | null;
+}) {
+  // Fecha com ESC
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+      style={{
+        position: "fixed", inset: 0, zIndex: 100,
+        background: "rgba(10, 10, 8, 0.55)",
+        backdropFilter: "blur(2px)",
+        display: "flex", alignItems: "flex-start", justifyContent: "center",
+        padding: "8vh 16px 16px",
+        overflow: "auto",
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: 720, position: "relative" }}>
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          marginBottom: 10,
+        }}>
+          <div className="mono" style={{
+            fontSize: 10, color: "rgba(245,242,235,0.55)", letterSpacing: 1.2,
+            textTransform: "uppercase", fontWeight: 600,
+          }}>
+            Editando tarefa
+          </div>
+          <button
+            onClick={onCancel}
+            aria-label="Fechar"
+            style={{
+              background: "transparent", border: "none", color: "rgba(245,242,235,0.6)",
+              fontSize: 18, cursor: "pointer", padding: "2px 8px", lineHeight: 1,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+        <NewTaskForm
+          team={team}
+          initial={task}
+          submitLabel="Salvar alterações"
+          onSubmit={onSubmit}
+          onCancel={onCancel}
+          submitting={submitting}
+          error={error}
+        />
+      </div>
+    </div>
   );
 }
 
