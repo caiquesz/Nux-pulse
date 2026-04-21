@@ -175,9 +175,9 @@ export function Overview() {
               <div className="stat-delta">
                 <span className="dim">vs. período ant.</span>
               </div>
-              {series.length > 0 && (
+              {k.series.length > 0 && (
                 <div className="stat-spark">
-                  <Sparkline series={series.length > 1 ? series : [0, 0]} height={36} />
+                  <Sparkline series={k.series.length > 1 ? k.series : [0, 0]} height={36} />
                 </div>
               )}
             </div>
