@@ -24,7 +24,6 @@ export default function ReportsPage() {
 
   const now = new Date();
   const ov = overview.data;
-  const cps = (campaigns.data?.campaigns ?? []).slice(0, 5);
   const fn  = funnel.data?.stages ?? [];
   const series = daily.data?.series ?? [];
   const clientName = client.data?.name ?? slug;
@@ -38,11 +37,6 @@ export default function ReportsPage() {
     if (ov.messages > 0)  return { key: "messages",  label: "conversa", plural: "conversas no WhatsApp", value: ov.messages, cost: ov.cost_per_message };
     return null;
   }, [ov]);
-
-  const bestCampaign = useMemo(() => {
-    if (!cps.length) return null;
-    return [...cps].sort((a, b) => b.clicks / Math.max(1, b.impressions) - a.clicks / Math.max(1, a.impressions))[0];
-  }, [cps]);
 
   const bestDay = useMemo(() => {
     if (!series.length) return null;
@@ -271,64 +265,10 @@ export default function ReportsPage() {
             </section>
           )}
 
-          {/* ── TOP 5 CAMPANHAS ───────────────────────────────────── */}
-          {cps.length > 0 && (
-            <section>
-              <SectionHeader num="04" title="Campanhas em destaque" subtitle="Top 5 por investimento" />
-              <div style={{ display: "grid", gap: 8 }}>
-                {cps.map((c, i) => {
-                  const pctOfTotal = ov?.spend ? (c.spend / ov.spend) * 100 : 0;
-                  const isBest = bestCampaign?.id === c.id && c.impressions > 100;
-                  return (
-                    <div key={c.id}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "28px 1fr 120px",
-                        gap: 14, padding: "14px 16px",
-                        background: "var(--surface-2)", borderRadius: 10,
-                        alignItems: "center",
-                      }}
-                    >
-                      <div className="mono" style={{ fontSize: 11, color: "var(--ink-4)", fontWeight: 600 }}>
-                        #{i + 1}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-                          {c.name}
-                          {isBest && (
-                            <span style={{
-                              marginLeft: 8, fontSize: 9, padding: "2px 6px",
-                              background: "oklch(0.90 0.22 125 / 0.2)", color: "oklch(0.50 0.22 125)",
-                              borderRadius: 3, fontFamily: "var(--font-mono)", letterSpacing: 0.5, textTransform: "uppercase",
-                            }}>
-                              ★ melhor CTR
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ height: 4, background: "var(--surface-3)", borderRadius: 2, overflow: "hidden" }}>
-                          <div style={{ width: `${Math.min(100, pctOfTotal)}%`, height: "100%", background: "var(--hero)" }} />
-                        </div>
-                        <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 4, letterSpacing: 0.3 }}>
-                          {pctOfTotal.toFixed(1)}% do investimento · {fmtIntCompact(c.clicks)} cliques · CTR {fmtPct(c.ctr)}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div className="mono" style={{ fontSize: 16, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                          {fmtBRL(c.spend)}
-                        </div>
-                        <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>investido</div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
           {/* ── FUNIL (se tiver compras ou leads) ──────────────── */}
           {fn.length > 0 && fn.some((s) => s.value > 0) && (
             <section>
-              <SectionHeader num="05" title="Funil de conversão" subtitle="Do impacto à ação" />
+              <SectionHeader num="04" title="Funil de conversão" subtitle="Do impacto à ação" />
               <div style={{ display: "grid", gap: 4, background: "var(--surface-2)", padding: 18, borderRadius: 12 }}>
                 {fn.map((s, i) => {
                   const top = fn[0]?.value || 1;
@@ -365,7 +305,7 @@ export default function ReportsPage() {
           {/* ── APÊNDICE técnico ──────────────────────────────────── */}
           {ov && (
             <section>
-              <SectionHeader num="06" title="Apêndice" subtitle="Métricas técnicas complementares" />
+              <SectionHeader num="05" title="Apêndice" subtitle="Métricas técnicas complementares" />
               <div style={{
                 display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2,
                 background: "var(--border)", border: "1px solid var(--border)",
