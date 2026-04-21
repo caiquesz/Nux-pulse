@@ -233,8 +233,8 @@ async def upload_file(
     content = await file.read()
     if not _accepts_mime(file.content_type):
         raise HTTPException(400, f"Tipo de arquivo não suportado: {file.content_type}")
-    if len(content) > 100 * 1024 * 1024:
-        raise HTTPException(413, "Arquivo acima de 100MB")
+    if len(content) > 50 * 1024 * 1024:
+        raise HTTPException(413, "Arquivo acima de 50MB (limite do bucket)")
 
     ext = os.path.splitext(file.filename or "")[1] or mimetypes.guess_extension(file.content_type or "") or ""
     storage_path = f"{slug}/{datetime.now().strftime('%Y/%m')}/{secrets.token_hex(6)}{ext}"

@@ -140,7 +140,7 @@ export function FilesTab({ slug }: { slug: string }) {
             : "Arraste arquivos ou clique aqui"}
         </div>
         <div style={{ fontSize: 11, color: "var(--ink-3)", display: "flex", justifyContent: "center", gap: 14, alignItems: "center" }}>
-          <span>PDF · PPT · DOCX · XLSX · imagem · vídeo · zip — até 100MB</span>
+          <span>PDF · PPT · DOCX · XLSX · imagem · vídeo · zip — até 50MB</span>
           <span>·</span>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer" }} onClick={(e) => e.stopPropagation()}>
             Categoria:
