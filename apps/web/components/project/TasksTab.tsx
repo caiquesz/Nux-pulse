@@ -77,6 +77,8 @@ function groupByPeriod(tasks: Task[]): Group[] {
 //  Component principal
 // ──────────────────────────────────────────────────────────────────────
 
+type ViewMode = "list" | "kanban";
+
 export function TasksTab({ slug }: { slug: string }) {
   const qc = useQueryClient();
   const [filters, setFilters] = useState<TaskFilters>({});
@@ -84,6 +86,13 @@ export function TasksTab({ slug }: { slug: string }) {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
+  const [view, setView] = useState<ViewMode>(() => {
+    if (typeof window === "undefined") return "list";
+    return (localStorage.getItem("nux-tasks-view") as ViewMode) ?? "list";
+  });
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("nux-tasks-view", view);
+  }, [view]);
 
   const tasksQ = useQuery({ queryKey: ["tasks", slug, filters], queryFn: () => listTasks(slug, filters), enabled: !!slug });
   const teamQ = useQuery({ queryKey: ["team"], queryFn: () => listTeam() });
@@ -179,9 +188,12 @@ export function TasksTab({ slug }: { slug: string }) {
           )}
         </button>
 
-        <button className="btn" style={{ marginLeft: "auto" }} onClick={() => setShowForm((s) => !s)}>
-          {showForm ? "Cancelar" : "+ Nova tarefa"}
-        </button>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          <ViewToggle value={view} onChange={setView} />
+          <button className="btn" onClick={() => setShowForm((s) => !s)}>
+            {showForm ? "Cancelar" : "+ Nova tarefa"}
+          </button>
+        </div>
       </div>
 
       {/* ── Faixa de filtros chips ──────────────────────────────────── */}
@@ -238,28 +250,280 @@ export function TasksTab({ slug }: { slug: string }) {
         </div>
       )}
 
-      <div style={{ display: "grid", gap: 20, marginTop: 16 }}>
-        {groups.map((g) => (
-          <Section key={g.key} group={g}>
-            {g.items.map((t) => (
-              <TaskCard
-                key={t.id}
-                task={t}
-                team={teamQ.data ?? []}
-                onChangeStatus={(status) => updateMut.mutate({ id: t.id, patch: { status } })}
-                onChangeAssignee={(assignee_id) => updateMut.mutate({ id: t.id, patch: { assignee_id } })}
-                onToggleDone={() => {
-                  const next: TaskStatus = t.status === "done" ? "todo" : "done";
-                  updateMut.mutate({ id: t.id, patch: { status: next } });
-                }}
-                onEdit={() => { setShowForm(false); setEditing(t); }}
-                onDelete={() => {
-                  if (confirm(`Excluir "${t.title}"?`)) deleteMut.mutate(t.id);
-                }}
-              />
-            ))}
-          </Section>
-        ))}
+      {view === "list" && (
+        <div style={{ display: "grid", gap: 20, marginTop: 16 }}>
+          {groups.map((g) => (
+            <Section key={g.key} group={g}>
+              {g.items.map((t) => (
+                <TaskCard
+                  key={t.id}
+                  task={t}
+                  team={teamQ.data ?? []}
+                  onChangeStatus={(status) => updateMut.mutate({ id: t.id, patch: { status } })}
+                  onChangeAssignee={(assignee_id) => updateMut.mutate({ id: t.id, patch: { assignee_id } })}
+                  onToggleDone={() => {
+                    const next: TaskStatus = t.status === "done" ? "todo" : "done";
+                    updateMut.mutate({ id: t.id, patch: { status: next } });
+                  }}
+                  onEdit={() => { setShowForm(false); setEditing(t); }}
+                  onDelete={() => {
+                    if (confirm(`Excluir "${t.title}"?`)) deleteMut.mutate(t.id);
+                  }}
+                />
+              ))}
+            </Section>
+          ))}
+        </div>
+      )}
+
+      {view === "kanban" && (
+        <KanbanBoard
+          tasks={filtered}
+          onChangeStatus={(id, status) => updateMut.mutate({ id, patch: { status } })}
+          onEdit={(t) => { setShowForm(false); setEditing(t); }}
+          onDelete={(id) => {
+            const t = (tasksQ.data ?? []).find((x) => x.id === id);
+            if (t && confirm(`Excluir "${t.title}"?`)) deleteMut.mutate(id);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+//  VIEW TOGGLE — Lista | Kanban
+// ──────────────────────────────────────────────────────────────────────
+
+function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (v: ViewMode) => void }) {
+  return (
+    <div className="seg" style={{ fontSize: 11 }}>
+      <button className={value === "list" ? "on" : ""} onClick={() => onChange("list")} title="Visualização em lista">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, verticalAlign: "-2px" }}>
+          <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
+          <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
+        </svg>
+        Lista
+      </button>
+      <button className={value === "kanban" ? "on" : ""} onClick={() => onChange("kanban")} title="Visualização em kanban">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, verticalAlign: "-2px" }}>
+          <rect x="3" y="3" width="6" height="18" rx="1" /><rect x="11" y="3" width="6" height="12" rx="1" /><rect x="19" y="3" width="2" height="8" rx="1" />
+        </svg>
+        Kanban
+      </button>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+//  KANBAN BOARD — 4 colunas (todo/doing/waiting/done), drag-and-drop HTML5
+// ──────────────────────────────────────────────────────────────────────
+
+function KanbanBoard({
+  tasks, onChangeStatus, onEdit, onDelete,
+}: {
+  tasks: Task[];
+  onChangeStatus: (id: number, s: TaskStatus) => void;
+  onEdit: (t: Task) => void;
+  onDelete: (id: number) => void;
+}) {
+  const [overCol, setOverCol] = useState<TaskStatus | null>(null);
+
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(4, minmax(240px, 1fr))",
+      gap: 12,
+      marginTop: 16,
+      overflowX: "auto",
+      paddingBottom: 4,
+    }}>
+      {STATUS_ORDER.map((st) => {
+        const col = tasks.filter((t) => t.status === st);
+        const cfg = STATUS[st];
+        const isOver = overCol === st;
+        return (
+          <div
+            key={st}
+            onDragOver={(e) => { e.preventDefault(); setOverCol(st); }}
+            onDragLeave={() => setOverCol((c) => (c === st ? null : c))}
+            onDrop={(e) => {
+              e.preventDefault();
+              setOverCol(null);
+              const id = Number(e.dataTransfer.getData("text/task-id"));
+              if (id && Number.isFinite(id)) onChangeStatus(id, st);
+            }}
+            style={{
+              background: isOver ? "var(--surface-2)" : "var(--surface)",
+              border: `1px solid ${isOver ? "var(--ink-2)" : "var(--border)"}`,
+              borderRadius: 10, padding: 10,
+              minHeight: 280,
+              display: "flex", flexDirection: "column", gap: 8,
+              transition: "background .12s, border-color .12s",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 4px" }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", letterSpacing: 0.2 }}>
+                {cfg.label}
+              </span>
+              <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: "auto" }}>
+                {col.length}
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+              {col.map((t) => (
+                <KanbanCard
+                  key={t.id}
+                  task={t}
+                  onEdit={() => onEdit(t)}
+                  onDelete={() => onDelete(t.id)}
+                />
+              ))}
+              {col.length === 0 && (
+                <div style={{
+                  flex: 1, minHeight: 80,
+                  border: "1px dashed var(--border-2)", borderRadius: 8,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, color: "var(--ink-4)", fontFamily: "var(--font-mono)",
+                  letterSpacing: 0.5, textTransform: "uppercase",
+                }}>
+                  arraste aqui
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function KanbanCard({ task, onEdit, onDelete }: {
+  task: Task;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+  const priCfg = PRIORITY[task.priority];
+  const platformCfg = task.platform ? PLATFORM[task.platform] : null;
+  const due = task.due_at ? new Date(task.due_at) : null;
+  const overdue = due && task.status !== "done" && due < new Date();
+  const initials = task.assignee_name ? task.assignee_name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase() : null;
+
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/task-id", String(task.id));
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={onEdit}
+      role="button"
+      tabIndex={0}
+      style={{
+        position: "relative",
+        background: "var(--surface-2)",
+        border: "1px solid var(--border)",
+        borderLeft: `3px solid ${priCfg.color}`,
+        borderRadius: 6,
+        padding: "9px 10px 9px 10px",
+        cursor: "grab",
+        transition: "background .08s, border-color .08s",
+        userSelect: "none",
+      }}
+    >
+      {/* Header com plataforma + ações no hover */}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 14 }}>
+        {platformCfg && (
+          <span
+            title={platformCfg.label}
+            style={{
+              width: 16, height: 16, borderRadius: 3,
+              background: platformCfg.color, color: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 8, fontWeight: 700, fontFamily: "var(--font-mono)",
+            }}
+          >
+            {platformCfg.label.slice(0, 1)}
+          </span>
+        )}
+        {task.ai_scheduled && (
+          <span className="mono" style={{
+            fontSize: 8, color: "oklch(0.45 0.18 125)",
+            background: "oklch(0.95 0.12 125)",
+            padding: "1px 4px", borderRadius: 3, letterSpacing: 0.4,
+            textTransform: "uppercase", fontWeight: 700,
+          }}>AI</span>
+        )}
+        <div style={{ flex: 1 }} />
+        {hover && (
+          <>
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              title="Editar"
+              style={{
+                background: "transparent", border: "none",
+                color: "var(--ink-3)", cursor: "pointer", padding: 2,
+                borderRadius: 3, lineHeight: 0,
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+              </svg>
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              title="Excluir"
+              style={{
+                background: "transparent", border: "none",
+                color: "var(--ink-4)", cursor: "pointer", padding: 2,
+                fontSize: 10, lineHeight: 1,
+              }}
+            >✕</button>
+          </>
+        )}
+      </div>
+
+      {/* Título */}
+      <div style={{
+        fontSize: 13, fontWeight: 500, color: "var(--ink)",
+        marginTop: 4, lineHeight: 1.3,
+        textDecoration: task.status === "done" ? "line-through" : "none",
+      }}>
+        {task.title}
+      </div>
+
+      {/* Footer: due + assignee */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
+        {due ? (
+          <span className="mono" style={{
+            fontSize: 10, color: overdue ? "var(--neg)" : "var(--ink-3)",
+            fontWeight: overdue ? 600 : 400, letterSpacing: 0.2,
+          }}>
+            {formatDueLabel(due)}
+          </span>
+        ) : (
+          <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)", fontStyle: "italic" }}>
+            sem data
+          </span>
+        )}
+        <div style={{ flex: 1 }} />
+        {initials && (
+          <span
+            title={task.assignee_name ?? ""}
+            style={{
+              width: 20, height: 20, borderRadius: "50%",
+              background: task.assignee_color ?? "var(--ink-3)", color: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 9, fontWeight: 700, fontFamily: "var(--font-sans)",
+            }}
+          >
+            {initials}
+          </span>
+        )}
       </div>
     </div>
   );
