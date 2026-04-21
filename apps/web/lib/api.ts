@@ -386,7 +386,7 @@ export const listTasks = (slug: string, filters?: TaskFilters) => {
   const q = new URLSearchParams();
   if (filters) {
     for (const [k, v] of Object.entries(filters)) {
-      if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== "") q.set(k, String(v));
     }
   }
   const qs = q.toString();
