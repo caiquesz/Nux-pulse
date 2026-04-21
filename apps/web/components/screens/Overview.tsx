@@ -218,23 +218,42 @@ export function Overview() {
                 : "Os insights diários aparecem aqui após o próximo backfill"}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span className="tag lime mono">● LIVE · META ADS</span>
+        </div>
+
+        {/* Legenda explícita: o gráfico tem 2 linhas em escalas diferentes */}
+        {series.length > 1 && (
+          <div style={{ display: "flex", gap: 16, marginTop: 14, fontSize: 11, fontFamily: "var(--font-mono)", color: "rgba(234,231,223,0.75)", letterSpacing: 0.3, position: "relative", zIndex: 1 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{ width: 14, height: 2, background: "var(--lime)", borderRadius: 1 }} />
+              Investimento (R$/dia)
+            </span>
             {overlay && (
-              <span className="tag mono" style={{ background: "rgba(234,231,223,0.08)", color: "rgba(234,231,223,0.7)" }}>
-                ·  ·  {overlay.label.toLowerCase()}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  width: 14, height: 2,
+                  background: "repeating-linear-gradient(90deg, var(--citrus) 0 4px, transparent 4px 7px)",
+                }} />
+                {overlay.label} (passa o mouse pra ver o nº)
               </span>
             )}
-            <span className="tag lime mono">● LIVE · META ADS</span>
           </div>
-        </div>
-        <div style={{ marginTop: 20, position: "relative", zIndex: 1 }}>
+        )}
+
+        <div style={{ marginTop: 16, position: "relative", zIndex: 1 }}>
           {series.length > 1 ? (
             <BigChart
               series={series}
               compare={overlay?.values}
+              labels={dateLabels}
+              seriesLabel="Investimento"
+              seriesFormat={(v) => fmtBRL(v)}
+              compareLabel={overlay?.label}
+              compareFormat={(v) => Math.round(v).toLocaleString("pt-BR")}
               height={220}
               lineColor="var(--lime)"
               fillColor="oklch(0.90 0.22 125 / 0.18)"
+              compareColor="var(--citrus)"
               axisColor="rgba(234,231,223,0.45)"
               gridColor="rgba(234,231,223,0.08)"
             />

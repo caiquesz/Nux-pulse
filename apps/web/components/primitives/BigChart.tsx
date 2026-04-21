@@ -5,20 +5,37 @@ import { seriesToPath, seriesToBars, formatShort } from "@/lib/chart-utils";
 type Props = {
   series: number[];
   compare?: number[];
+  /** Labels (datas, ex: "14/04") alinhadas com cada ponto — aparece no tooltip. */
+  labels?: string[];
+  seriesLabel?: string;
+  seriesFormat?: (v: number) => string;
+  compareLabel?: string;
+  compareFormat?: (v: number) => string;
   style?: "line" | "area" | "bar";
   height?: number;
   /** CSS custom-property ou cor direta (ex: "var(--lime)" ou "#D4F24A"). */
   lineColor?: string;
   fillColor?: string;
+  /** Cor da linha de comparação (default neutro). */
+  compareColor?: string;
   /** Cor dos labels/grid — útil pra gráfico sobre fundo escuro. */
   axisColor?: string;
   gridColor?: string;
 };
 
 export function BigChart({
-  series, compare, style = "area", height = 260,
+  series,
+  compare,
+  labels,
+  seriesLabel,
+  seriesFormat = (v) => formatShort(v, true),
+  compareLabel,
+  compareFormat = (v) => formatShort(v, true),
+  style = "area",
+  height = 260,
   lineColor = "var(--chart-line)",
   fillColor = "var(--chart-fill)",
+  compareColor = "var(--chart-line-2)",
   axisColor = "var(--ink-4)",
   gridColor = "var(--chart-grid)",
 }: Props) {
@@ -45,7 +62,20 @@ export function BigChart({
   const min = Math.min(...series);
   const yTicks = 4;
   const gridLines = Array.from({ length: yTicks + 1 }, (_, i) => pad + (plotH * i) / yTicks);
-  const xLabels = ["30d", "24d", "18d", "12d", "6d", "hoje"];
+
+  // xLabels: se veio labels[], distribui 6 amostras dele; senão usa rótulos relativos ("30d"…"hoje").
+  const xLabels = useMemo(() => {
+    if (labels && labels.length >= 2) {
+      const n = 6;
+      const out: string[] = [];
+      for (let i = 0; i < n; i++) {
+        const idx = Math.round((i * (labels.length - 1)) / (n - 1));
+        out.push(labels[idx] ?? "");
+      }
+      return out;
+    }
+    return ["30d", "24d", "18d", "12d", "6d", "hoje"];
+  }, [labels]);
 
   const onMove = (e: React.MouseEvent) => {
     if (!wrap.current) return;
@@ -67,7 +97,7 @@ export function BigChart({
           const v = max - ((max - min) * i) / yTicks;
           return (
             <text key={i} x={4} y={y + 3} fontSize={9} fontFamily="var(--font-mono)" fill={axisColor} letterSpacing={0.5}>
-              {formatShort(v)}
+              {seriesFormat(v)}
             </text>
           );
         })}
@@ -86,7 +116,9 @@ export function BigChart({
         ) : (
           <>
             {style !== "line" && <path d={area} fill={fillColor} />}
-            {cmpPath && <path d={cmpPath.line} fill="none" stroke="var(--chart-line-2)" strokeWidth={1.5} strokeDasharray="4 4" />}
+            {cmpPath && (
+              <path d={cmpPath.line} fill="none" stroke={compareColor} strokeWidth={1.5} strokeDasharray="4 4" />
+            )}
             <path d={line} fill="none" stroke={lineColor} strokeWidth={1.75} />
           </>
         )}
@@ -101,17 +133,32 @@ export function BigChart({
       </svg>
       {hover && (
         <div style={{
-          position: "absolute", left: Math.min(hover.x + 12, w - 140), top: 8,
+          position: "absolute", left: Math.min(hover.x + 12, w - 180), top: 8,
           background: "var(--ink)", color: "var(--accent-ink)",
           padding: "8px 10px", borderRadius: 6, fontSize: 11, pointerEvents: "none",
           fontFamily: "var(--font-mono)", letterSpacing: "0.5px",
           boxShadow: "0 4px 16px rgba(0,0,0,0.15)", whiteSpace: "nowrap",
         }}>
-          <div style={{ opacity: 0.6, fontSize: 9, textTransform: "uppercase", marginBottom: 3 }}>
-            dia {series.length - hover.idx}
+          <div style={{ opacity: 0.6, fontSize: 9, textTransform: "uppercase", marginBottom: 4 }}>
+            {labels?.[hover.idx] ?? `dia ${series.length - hover.idx}`}
           </div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{formatShort(series[hover.idx], true)}</div>
-          {compare && <div style={{ opacity: 0.5, fontSize: 10, marginTop: 2 }}>vs {formatShort(compare[hover.idx], true)}</div>}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: lineColor, display: "inline-block" }} />
+            <span style={{ opacity: 0.7, fontWeight: 400 }}>{seriesLabel ?? ""}</span>
+            <span>{seriesFormat(series[hover.idx])}</span>
+          </div>
+          {compare && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginTop: 3 }}>
+              <span
+                style={{
+                  width: 8, height: 2, background: compareColor,
+                  display: "inline-block", borderRadius: 1,
+                }}
+              />
+              <span style={{ opacity: 0.7 }}>{compareLabel ?? "comparação"}</span>
+              <span style={{ opacity: 0.9 }}>{compareFormat(compare[hover.idx])}</span>
+            </div>
+          )}
         </div>
       )}
     </div>
