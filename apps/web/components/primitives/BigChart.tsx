@@ -50,18 +50,27 @@ export function BigChart({
     return () => ro.disconnect();
   }, []);
 
-  const pad = 24;
-  const plotW = w - pad * 2;
-  const plotH = height - pad * 2;
+  // Paddings — generosos o suficiente pra comportar labels "R$ 1.234" sem overflow.
+  const padL = 52;
+  const padR = compare ? 52 : 16;
+  const padT = 12;
+  const padB = 26;
+  const plotW = Math.max(1, w - padL - padR);
+  const plotH = Math.max(1, height - padT - padB);
 
-  const { line, area } = useMemo(() => seriesToPath(series, w, height, pad), [series, w, height]);
-  const cmpPath = useMemo(() => (compare ? seriesToPath(compare, w, height, pad) : null), [compare, w, height]);
+  // Geração dos paths — passa padL/padT porque o util do chart usa "pad" uniforme.
+  // Truque: renderiza o gráfico numa caixa diferente via transform.
+  const { line, area } = useMemo(() => seriesToPath(series, plotW + padL * 2, plotH + padT * 2, padL), [series, plotW, plotH, padL, padT]);
+  const cmpPath = useMemo(() => (compare ? seriesToPath(compare, plotW + padL * 2, plotH + padT * 2, padL) : null), [compare, plotW, plotH, padL, padT]);
   const barData = useMemo(() => seriesToBars(series, plotW, plotH, 3), [series, plotW, plotH]);
 
   const max = Math.max(...series);
-  const min = Math.min(...series);
+  const min = Math.min(...series, 0);
+  const cmpMax = compare ? Math.max(...compare) : 0;
+  const cmpMin = compare ? Math.min(...compare, 0) : 0;
+
   const yTicks = 4;
-  const gridLines = Array.from({ length: yTicks + 1 }, (_, i) => pad + (plotH * i) / yTicks);
+  const gridLines = Array.from({ length: yTicks + 1 }, (_, i) => padT + (plotH * i) / yTicks);
 
   // xLabels: se veio labels[], distribui 6 amostras dele; senão usa rótulos relativos ("30d"…"hoje").
   const xLabels = useMemo(() => {
@@ -81,43 +90,61 @@ export function BigChart({
     if (!wrap.current) return;
     const rect = wrap.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
-    const idx = Math.round(((x - pad) / plotW) * (series.length - 1));
-    if (idx >= 0 && idx < series.length) setHover({ idx, x: pad + (idx * plotW) / (series.length - 1) });
+    const rel = ((x - padL) / plotW) * (series.length - 1);
+    const idx = Math.max(0, Math.min(series.length - 1, Math.round(rel)));
+    setHover({ idx, x: padL + (idx * plotW) / Math.max(1, series.length - 1) });
   };
 
-  const hoverY = hover ? pad + plotH - ((series[hover.idx] - min) / (max - min || 1)) * plotH : 0;
+  const hoverY = hover ? padT + plotH - ((series[hover.idx] - min) / (max - min || 1)) * plotH : 0;
 
   return (
     <div ref={wrap} style={{ position: "relative", height }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
       <svg width={w} height={height} style={{ display: "block" }}>
+        {/* Grid lines horizontais */}
         {gridLines.map((y, i) => (
-          <line key={i} x1={pad} x2={w - pad} y1={y} y2={y} stroke={gridColor} strokeWidth={1} />
+          <line key={i} x1={padL} x2={w - padR} y1={y} y2={y} stroke={gridColor} strokeWidth={1} />
         ))}
+
+        {/* Eixo Y esquerdo (series principal) */}
         {gridLines.map((y, i) => {
           const v = max - ((max - min) * i) / yTicks;
           return (
-            <text key={i} x={4} y={y + 3} fontSize={9} fontFamily="var(--font-mono)" fill={axisColor} letterSpacing={0.5}>
+            <text key={i} x={padL - 6} y={y + 3} fontSize={9} fontFamily="var(--font-mono)"
+                  fill={axisColor} letterSpacing={0.3} textAnchor="end">
               {seriesFormat(v)}
             </text>
           );
         })}
+
+        {/* Eixo Y direito (compare) — só se existir serie de comparação */}
+        {compare && gridLines.map((y, i) => {
+          const v = cmpMax - ((cmpMax - cmpMin) * i) / yTicks;
+          return (
+            <text key={`cmp-${i}`} x={w - padR + 6} y={y + 3} fontSize={9} fontFamily="var(--font-mono)"
+                  fill={compareColor} letterSpacing={0.3} textAnchor="start" opacity={0.85}>
+              {compareFormat(v)}
+            </text>
+          );
+        })}
+
+        {/* Eixo X (datas) */}
         {xLabels.map((l, i) => (
-          <text key={i} x={pad + (plotW * i) / (xLabels.length - 1)} y={height - 4} fontSize={9}
-                fontFamily="var(--font-mono)" fill={axisColor} textAnchor="middle" letterSpacing={0.5}>
+          <text key={i} x={padL + (plotW * i) / (xLabels.length - 1)} y={height - 8} fontSize={9}
+                fontFamily="var(--font-mono)" fill={axisColor} textAnchor="middle" letterSpacing={0.3}>
             {l}
           </text>
         ))}
 
         {style === "bar" ? (
           barData.map((b, i) => (
-            <rect key={i} x={pad + b.x} y={pad + b.y} width={b.w} height={b.h}
+            <rect key={i} x={padL + b.x} y={padT + b.y} width={b.w} height={b.h}
                   fill={lineColor} opacity={hover?.idx === i ? 1 : 0.82} rx={1.5} />
           ))
         ) : (
           <>
             {style !== "line" && <path d={area} fill={fillColor} />}
             {cmpPath && (
-              <path d={cmpPath.line} fill="none" stroke={compareColor} strokeWidth={1.5} strokeDasharray="4 4" />
+              <path d={cmpPath.line} fill="none" stroke={compareColor} strokeWidth={1.5} strokeDasharray="5 4" />
             )}
             <path d={line} fill="none" stroke={lineColor} strokeWidth={1.75} />
           </>
@@ -125,15 +152,15 @@ export function BigChart({
 
         {hover && style !== "bar" && (
           <>
-            <line x1={hover.x} x2={hover.x} y1={pad} y2={height - pad}
+            <line x1={hover.x} x2={hover.x} y1={padT} y2={height - padB}
                   stroke="var(--ink)" strokeWidth={1} strokeDasharray="2 3" opacity={0.4} />
-            <circle cx={hover.x} cy={hoverY} r={4} fill="var(--bg)" stroke="var(--ink)" strokeWidth={1.75} />
+            <circle cx={hover.x} cy={hoverY} r={4} fill="var(--bg)" stroke={lineColor} strokeWidth={1.75} />
           </>
         )}
       </svg>
       {hover && (
         <div style={{
-          position: "absolute", left: Math.min(hover.x + 12, w - 180), top: 8,
+          position: "absolute", left: Math.min(hover.x + 12, w - 200), top: 8,
           background: "var(--ink)", color: "var(--accent-ink)",
           padding: "8px 10px", borderRadius: 6, fontSize: 11, pointerEvents: "none",
           fontFamily: "var(--font-mono)", letterSpacing: "0.5px",

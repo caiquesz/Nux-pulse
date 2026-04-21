@@ -230,19 +230,32 @@ export default function ReportsPage() {
                 title="Tendência diária"
                 subtitle={primaryConversion ? `Investimento vs. ${primaryConversion.plural.toLowerCase()} ao longo dos ${days} dias` : `Investimento ao longo dos ${days} dias`}
               />
-              <div style={{ background: "var(--surface-2)", borderRadius: 12, padding: 20 }}>
-                <div style={{ display: "flex", gap: 18, marginBottom: 12, fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--ink-3)", letterSpacing: 0.3 }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ width: 14, height: 2, background: "var(--hero)", borderRadius: 1 }} />
-                    Investimento (R$)
+              {/* Paleta profissional (pronta pra PDF):
+                  - Linha principal: navy profundo (oklch 0.38 0.10 250) — sóbrio, imprime bem
+                  - Compara: terracota queimada — contraste quente sem ser gritante  */}
+              <div style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 12, padding: 20,
+              }}>
+                {/* Legenda */}
+                <div style={{
+                  display: "flex", gap: 24, marginBottom: 16, fontSize: 11,
+                  fontFamily: "var(--font-mono)", color: "var(--ink-2)", letterSpacing: 0.3,
+                  textTransform: "uppercase", fontWeight: 600,
+                }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 16, height: 3, background: "oklch(0.38 0.10 250)", borderRadius: 1 }} />
+                    Investimento <span style={{ color: "var(--ink-4)", fontWeight: 400, textTransform: "none" }}>(eixo esquerdo)</span>
                   </span>
                   {primaryConversion && convSeries.length > 0 && (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ width: 14, height: 2, background: "repeating-linear-gradient(90deg, var(--citrus) 0 4px, transparent 4px 7px)" }} />
-                      {primaryConversion.plural} (contagem)
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ width: 16, height: 2, background: "repeating-linear-gradient(90deg, oklch(0.52 0.16 35) 0 5px, transparent 5px 9px)" }} />
+                      {primaryConversion.plural} <span style={{ color: "var(--ink-4)", fontWeight: 400, textTransform: "none" }}>(eixo direito)</span>
                     </span>
                   )}
                 </div>
+
                 <BigChart
                   series={spendSeries}
                   compare={primaryConversion ? convSeries : undefined}
@@ -251,17 +264,56 @@ export default function ReportsPage() {
                   seriesFormat={(v) => fmtBRL(v)}
                   compareLabel={primaryConversion?.plural}
                   compareFormat={(v) => Math.round(v).toLocaleString("pt-BR")}
-                  height={220}
-                  lineColor="var(--hero)"
-                  fillColor="var(--hero-bg)"
-                  compareColor="var(--citrus)"
+                  height={240}
+                  lineColor="oklch(0.38 0.10 250)"
+                  fillColor="oklch(0.38 0.10 250 / 0.10)"
+                  compareColor="oklch(0.52 0.16 35)"
+                  axisColor="var(--ink-3)"
+                  gridColor="var(--border)"
                 />
+
+                {/* Stats row — legível em PDF, sem precisar de hover */}
+                {(() => {
+                  const n = series.length;
+                  const totalSpend = series.reduce((s, p) => s + p.spend, 0);
+                  const avgSpend = n > 0 ? totalSpend / n : 0;
+                  const peak = series.reduce((m, s) => (s.spend > m.spend ? s : m), series[0]);
+                  const totalConv = primaryConversion
+                    ? series.reduce((s, p) => s + Number(p[convKey] ?? 0), 0)
+                    : 0;
+                  const daysWithConv = primaryConversion
+                    ? series.filter((p) => Number(p[convKey] ?? 0) > 0).length
+                    : 0;
+                  return (
+                    <div style={{
+                      marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border)",
+                      display: "grid", gridTemplateColumns: primaryConversion ? "repeat(4, 1fr)" : "repeat(2, 1fr)",
+                      gap: 20,
+                    }}>
+                      <MiniStat label="Investimento médio/dia" value={fmtBRL(avgSpend)} />
+                      <MiniStat
+                        label="Maior investimento"
+                        value={fmtBRL(peak.spend)}
+                        hint={peak.date.split("-").reverse().join("/")}
+                      />
+                      {primaryConversion && (
+                        <>
+                          <MiniStat
+                            label={`${primaryConversion.plural} por dia`}
+                            value={(totalConv / Math.max(1, n)).toFixed(1).replace(".", ",")}
+                            hint={`${totalConv} no total`}
+                          />
+                          <MiniStat
+                            label="Dias com resultado"
+                            value={`${daysWithConv} de ${n}`}
+                            hint={`${((daysWithConv / Math.max(1, n)) * 100).toFixed(0)}% dos dias`}
+                          />
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
-              {bestDay && (
-                <div style={{ marginTop: 10, fontSize: 12, color: "var(--ink-3)", fontStyle: "italic" }}>
-                  Melhor dia do período: {bestDay.date.split("-").reverse().join("/")} com {fmtBRL(bestDay.spend)} investidos.
-                </div>
-              )}
             </section>
           )}
 
@@ -399,6 +451,22 @@ function BigKpi({
         )}
         {delta != null && <span style={{ color: "var(--ink-4)", marginLeft: 6 }}>vs. anterior</span>}
       </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div>
+      <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", letterSpacing: 0.8, textTransform: "uppercase", fontWeight: 600 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4, fontVariantNumeric: "tabular-nums", color: "var(--ink)" }}>
+        {value}
+      </div>
+      {hint && (
+        <div className="mono" style={{ fontSize: 9, color: "var(--ink-4)", marginTop: 2 }}>{hint}</div>
+      )}
     </div>
   );
 }
