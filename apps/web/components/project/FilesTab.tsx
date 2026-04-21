@@ -6,15 +6,11 @@ import {
   addExternalFile, deleteFile, listFiles, uploadFile,
   type ClientFile, type FileCategory,
 } from "@/lib/api";
+import { FILE_CATEGORY } from "./constants";
 
-const CATEGORIES: { key: FileCategory; label: string; color: string; icon: string }[] = [
-  { key: "briefing",   label: "Briefing",     color: "var(--info)",   icon: "📋" },
-  { key: "id_visual",  label: "ID Visual",    color: "var(--lime)",   icon: "🎨" },
-  { key: "fluxograma", label: "Fluxograma",   color: "var(--cobalt)", icon: "🧭" },
-  { key: "relatorio",  label: "Relatórios",   color: "var(--hero)",   icon: "📊" },
-  { key: "contrato",   label: "Contratos",    color: "var(--warn)",   icon: "📜" },
-  { key: "outros",     label: "Outros",       color: "var(--ink-4)",  icon: "📁" },
-];
+const CATEGORIES = (Object.keys(FILE_CATEGORY) as FileCategory[]).map((k) => ({
+  key: k, label: FILE_CATEGORY[k].label, color: FILE_CATEGORY[k].color,
+}));
 
 function formatBytes(b: number | null): string {
   if (!b) return "";
@@ -24,17 +20,21 @@ function formatBytes(b: number | null): string {
   return `${(b / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
-function iconFor(f: ClientFile): string {
-  if (f.external_url) return "🔗";
+/** 3 letras do tipo — mostradas quando não tem preview (PDF, DOCX, etc.) */
+function extensionTag(f: ClientFile): string {
+  if (f.external_url) return "LINK";
   const m = f.mime_type ?? "";
-  if (m.startsWith("image/")) return "🖼";
-  if (m.startsWith("video/")) return "🎬";
-  if (m === "application/pdf") return "📄";
-  if (m.includes("presentation")) return "📽";
-  if (m.includes("spreadsheet") || m === "text/csv") return "📊";
-  if (m.includes("word") || m === "text/plain") return "📝";
-  if (m === "application/zip") return "📦";
-  return "📁";
+  if (m === "application/pdf") return "PDF";
+  if (m.includes("presentation")) return "PPT";
+  if (m.includes("wordprocessing")) return "DOCX";
+  if (m.includes("spreadsheet")) return "XLSX";
+  if (m === "text/csv") return "CSV";
+  if (m === "text/plain") return "TXT";
+  if (m === "application/zip") return "ZIP";
+  if (m.startsWith("video/")) return "VIDEO";
+  if (m.startsWith("image/")) return "IMG";
+  if (m === "application/json") return "JSON";
+  return "FILE";
 }
 
 export function FilesTab({ slug }: { slug: string }) {
@@ -134,10 +134,10 @@ export function FilesTab({ slug }: { slug: string }) {
           hidden
           onChange={(e) => e.target.files?.length && uploadMut.mutate(e.target.files)}
         />
-        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6, color: "var(--ink-2)" }}>
           {uploadMut.isPending
-            ? `⏳ Enviando ${uploadMut.variables?.length ?? 0} arquivo(s)…`
-            : "Arraste arquivos ou clique aqui"}
+            ? `Enviando ${uploadMut.variables?.length ?? 0} arquivo(s)…`
+            : "Arraste arquivos ou clique para selecionar"}
         </div>
         <div style={{ fontSize: 11, color: "var(--ink-3)", display: "flex", justifyContent: "center", gap: 14, alignItems: "center" }}>
           <span>PDF · PPT · DOCX · XLSX · imagem · vídeo · zip — até 50MB</span>
@@ -207,13 +207,21 @@ function FileTile({ file, onDelete }: { file: ClientFile; onDelete: () => void }
   const cat = CATEGORIES.find((c) => c.key === (file.category as FileCategory)) ?? CATEGORIES[5];
   const isImage = file.mime_type?.startsWith("image/");
   const href = file.download_url ?? file.external_url ?? "#";
+  const ext = extensionTag(file);
 
   return (
-    <div className="card" style={{ overflow: "hidden", display: "flex", flexDirection: "column" }}>
+    <div
+      className="card"
+      style={{
+        overflow: "hidden", display: "flex", flexDirection: "column",
+        transition: "border-color .08s, transform .08s",
+        borderTop: `2px solid ${cat.color}`,
+      }}
+    >
       <a href={href} target="_blank" rel="noopener" style={{ textDecoration: "none", color: "inherit" }}>
         <div style={{
           aspectRatio: "16 / 9",
-          background: "var(--surface-2)",
+          background: isImage && file.download_url ? "var(--ink)" : "var(--surface-2)",
           display: "flex", alignItems: "center", justifyContent: "center",
           position: "relative",
           overflow: "hidden",
@@ -222,43 +230,76 @@ function FileTile({ file, onDelete }: { file: ClientFile; onDelete: () => void }
             <img src={file.download_url} alt={file.name}
                  style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
-            <span style={{ fontSize: 40 }}>{iconFor(file)}</span>
+            <span
+              className="mono"
+              style={{
+                fontSize: 22, fontWeight: 700, letterSpacing: 1.5,
+                color: cat.color, opacity: 0.82,
+              }}
+            >
+              {ext}
+            </span>
           )}
-          <span style={{
-            position: "absolute", top: 8, left: 8,
-            fontSize: 9, padding: "3px 7px",
-            background: "var(--surface)", color: cat.color,
-            borderRadius: 3, fontFamily: "var(--font-mono)", letterSpacing: 0.5,
-            textTransform: "uppercase", fontWeight: 600,
-            border: "1px solid var(--border)",
-          }}>
+          <span
+            className="mono"
+            style={{
+              position: "absolute", top: 8, left: 8,
+              fontSize: 9, padding: "3px 8px",
+              background: "var(--surface)", color: cat.color,
+              borderRadius: 3, letterSpacing: 0.6,
+              textTransform: "uppercase", fontWeight: 700,
+              border: "1px solid var(--border)",
+            }}
+          >
             {cat.label}
           </span>
         </div>
       </a>
-      <div style={{ padding: "10px 12px", flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ padding: "12px 14px", flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
         <div title={file.name} style={{
-          fontSize: 12, fontWeight: 600, lineHeight: 1.3,
+          fontSize: 12, fontWeight: 600, lineHeight: 1.35, color: "var(--ink)",
           overflow: "hidden", textOverflow: "ellipsis",
           display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+          minHeight: 32,
         }}>
           {file.name}
         </div>
-        <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <div className="mono" style={{
+          fontSize: 10, color: "var(--ink-4)", display: "flex", gap: 6,
+          flexWrap: "wrap", letterSpacing: 0.2,
+        }}>
           {file.external_url ? "link externo" : formatBytes(file.size_bytes)}
           <span>·</span>
           <span>{new Date(file.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}</span>
+          {file.uploaded_by_name && (
+            <>
+              <span>·</span>
+              <span>{file.uploaded_by_name.split(" ")[0]}</span>
+            </>
+          )}
         </div>
-        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-          <a href={href} target="_blank" rel="noopener" className="btn ghost" style={{ flex: 1, textAlign: "center", fontSize: 11, padding: "6px 8px" }}>
+        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener"
+            className="btn ghost"
+            style={{ flex: 1, textAlign: "center", fontSize: 11, padding: "7px 8px" }}
+            download={file.storage_path ? file.name : undefined}
+          >
             {file.external_url ? "Abrir" : "Baixar"}
           </a>
           <button
             onClick={onDelete}
-            className="icon-btn"
             title="Excluir"
-            style={{ color: "var(--ink-4)" }}
-          >✕</button>
+            style={{
+              background: "transparent", border: "1px solid var(--border)",
+              color: "var(--ink-4)", cursor: "pointer",
+              padding: "7px 10px", borderRadius: 6, fontSize: 12,
+            }}
+          >
+            ✕
+          </button>
         </div>
       </div>
     </div>

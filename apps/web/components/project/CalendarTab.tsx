@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { listTasks, type Task } from "@/lib/api";
+import { PRIORITY } from "./constants";
 
 const MONTH_NAMES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -21,10 +22,10 @@ function weekdayPtBR(d: Date): number {
 }
 
 const PRIORITY_DOT: Record<string, string> = {
-  baixa: "var(--ink-4)",
-  media: "var(--info)",
-  alta:  "var(--warn)",
-  urgente: "var(--neg)",
+  baixa: PRIORITY.baixa.color,
+  media: PRIORITY.media.color,
+  alta:  PRIORITY.alta.color,
+  urgente: PRIORITY.urgente.color,
 };
 
 export function CalendarTab({ slug }: { slug: string }) {
@@ -60,7 +61,7 @@ export function CalendarTab({ slug }: { slug: string }) {
     return map;
   }, [tasksQ.data]);
 
-  const withoutDate = (tasksQ.data ?? []).filter((t) => !t.due_at && t.status !== "arquivado");
+  const withoutDate = (tasksQ.data ?? []).filter((t) => !t.due_at && t.status !== "done");
 
   const today = new Date();
   const todayKey = today.toISOString().slice(0, 10);
@@ -141,8 +142,8 @@ export function CalendarTab({ slug }: { slug: string }) {
                       borderLeft: `2px solid ${PRIORITY_DOT[t.priority] ?? "var(--ink-4)"}`,
                       borderRadius: 2,
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      color: t.status === "publicado" || t.status === "arquivado" ? "var(--ink-4)" : "var(--ink-2)",
-                      textDecoration: t.status === "publicado" || t.status === "arquivado" ? "line-through" : "none",
+                      color: t.status === "done" ? "var(--ink-4)" : "var(--ink-2)",
+                      textDecoration: t.status === "done" ? "line-through" : "none",
                     }}
                   >
                     {t.due_at && (

@@ -332,9 +332,12 @@ export const updateMember = (id: number, body: Partial<TeamMember>) =>
   patch<TeamMember>(`/api/team/${id}`, body);
 
 // ── Tasks ───────────────────────────────────────────────────────────────
-export type TaskStatus = "briefing" | "producao" | "aprovacao" | "publicado" | "arquivado";
+export type TaskStatus = "todo" | "doing" | "waiting" | "done";
 export type TaskPriority = "baixa" | "media" | "alta" | "urgente";
-export type TaskScope = "cliente" | "interno";
+export type TaskPlatform = "meta" | "google" | "tiktok" | "linkedin" | "pinterest" | "geral" | "outro";
+export type TaskType =
+  | "briefing" | "criativo" | "lancamento" | "otimizacao"
+  | "relatorio" | "reuniao" | "aprovacao" | "analise" | "outro";
 
 export type Task = {
   id: number;
@@ -345,7 +348,8 @@ export type Task = {
   duration_min: number | null;
   status: TaskStatus;
   priority: TaskPriority;
-  scope: TaskScope;
+  platform: TaskPlatform | null;
+  task_type: TaskType | null;
   assignee_id: number | null;
   assignee_name: string | null;
   assignee_color: string | null;
@@ -362,16 +366,29 @@ export type TaskCreate = {
   duration_min?: number | null;
   status?: TaskStatus;
   priority?: TaskPriority;
-  scope?: TaskScope;
+  platform?: TaskPlatform | null;
+  task_type?: TaskType | null;
   assignee_id?: number | null;
   ai_scheduled?: boolean;
   ai_context?: string | null;
 };
 
-export const listTasks = (slug: string, status?: TaskStatus, upcomingDays?: number) => {
+export type TaskFilters = {
+  status?: TaskStatus;
+  platform?: TaskPlatform;
+  task_type?: TaskType;
+  assignee_id?: number;
+  priority?: TaskPriority;
+  upcoming_days?: number;
+};
+
+export const listTasks = (slug: string, filters?: TaskFilters) => {
   const q = new URLSearchParams();
-  if (status) q.set("status", status);
-  if (upcomingDays) q.set("upcoming_days", String(upcomingDays));
+  if (filters) {
+    for (const [k, v] of Object.entries(filters)) {
+      if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    }
+  }
   const qs = q.toString();
   return get<Task[]>(`/api/clients/${slug}/tasks${qs ? `?${qs}` : ""}`);
 };

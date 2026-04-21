@@ -56,16 +56,27 @@ class Task(Base, TimestampMixin):
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     duration_min: Mapped[int | None] = mapped_column(Integer)  # usado pra time-block
 
-    # Workflow
+    # Workflow — simplificado pra contexto de agência de tráfego pago.
+    # todo    = a fazer (criada, sem ação ainda)
+    # doing   = em andamento (time trabalhando ativamente)
+    # waiting = aguardando (cliente, aprovação, resposta externa)
+    # done    = concluída (entregue/publicado)
     status: Mapped[str] = mapped_column(
-        String(20), default="briefing", nullable=False
-    )  # briefing | producao | aprovacao | publicado | arquivado
+        String(20), default="todo", nullable=False
+    )
     priority: Mapped[str] = mapped_column(
         String(10), default="media", nullable=False
     )  # baixa | media | alta | urgente
     scope: Mapped[str] = mapped_column(
         String(10), default="cliente", nullable=False
-    )  # cliente | interno
+    )  # legado — mantido nullable pra compat; UI não usa mais
+
+    # ── Contexto de tráfego pago ───────────────────────────────────
+    # platform: plataforma da campanha (meta/google/tiktok/linkedin/pinterest/geral/outro)
+    platform: Mapped[str | None] = mapped_column(String(20))
+    # task_type: natureza do trabalho (briefing/criativo/lancamento/otimizacao/relatorio/
+    # reuniao/aprovacao/analise/outro)
+    task_type: Mapped[str | None] = mapped_column(String(20))
 
     # Responsável
     assignee_id: Mapped[int | None] = mapped_column(ForeignKey("team_members.id", ondelete="SET NULL"))

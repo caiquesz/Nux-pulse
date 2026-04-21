@@ -33,9 +33,13 @@ class TeamMemberRead(BaseModel):
 
 # ── Tasks ─────────────────────────────────────────────────────────────────
 
-TaskStatus = Literal["briefing", "producao", "aprovacao", "publicado", "arquivado"]
+TaskStatus = Literal["todo", "doing", "waiting", "done"]
 TaskPriority = Literal["baixa", "media", "alta", "urgente"]
-TaskScope = Literal["cliente", "interno"]
+TaskPlatform = Literal["meta", "google", "tiktok", "linkedin", "pinterest", "geral", "outro"]
+TaskType = Literal[
+    "briefing", "criativo", "lancamento", "otimizacao",
+    "relatorio", "reuniao", "aprovacao", "analise", "outro",
+]
 
 
 class TaskCreate(BaseModel):
@@ -43,9 +47,10 @@ class TaskCreate(BaseModel):
     description: str | None = None
     due_at: datetime | None = None
     duration_min: int | None = None
-    status: TaskStatus = "briefing"
+    status: TaskStatus = "todo"
     priority: TaskPriority = "media"
-    scope: TaskScope = "cliente"
+    platform: TaskPlatform | None = None
+    task_type: TaskType | None = None
     assignee_id: int | None = None
     ai_scheduled: bool = False
     ai_context: str | None = None
@@ -58,7 +63,8 @@ class TaskUpdate(BaseModel):
     duration_min: int | None = None
     status: TaskStatus | None = None
     priority: TaskPriority | None = None
-    scope: TaskScope | None = None
+    platform: TaskPlatform | None = None
+    task_type: TaskType | None = None
     assignee_id: int | None = None
     ai_scheduled: bool | None = None
     ai_context: str | None = None
@@ -75,7 +81,8 @@ class TaskRead(BaseModel):
     duration_min: int | None
     status: str
     priority: str
-    scope: str
+    platform: str | None
+    task_type: str | None
     assignee_id: int | None
     assignee_name: str | None = None
     assignee_color: str | None = None

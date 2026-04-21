@@ -48,7 +48,8 @@ def _task_to_read(t: Task) -> TaskRead:
         duration_min=t.duration_min,
         status=t.status,
         priority=t.priority,
-        scope=t.scope,
+        platform=t.platform,
+        task_type=t.task_type,
         assignee_id=t.assignee_id,
         assignee_name=t.assignee.name if t.assignee else None,
         assignee_color=t.assignee.avatar_color if t.assignee else None,
@@ -118,6 +119,10 @@ def update_member(member_id: int, payload: TeamMemberUpdate, db: Session = Depen
 def list_tasks(
     slug: str,
     status: str | None = Query(None, description="filtra por status"),
+    platform: str | None = Query(None, description="filtra por plataforma"),
+    task_type: str | None = Query(None, description="filtra por tipo"),
+    assignee_id: int | None = Query(None, description="filtra por responsável"),
+    priority: str | None = Query(None, description="filtra por prioridade"),
     upcoming_days: int | None = Query(None, description="só próximas N dias (inclui sem data)"),
     db: Session = Depends(get_db),
 ):
@@ -125,11 +130,19 @@ def list_tasks(
     q = db.query(Task).filter(Task.client_id == c.id)
     if status:
         q = q.filter(Task.status == status)
+    if platform:
+        q = q.filter(Task.platform == platform)
+    if task_type:
+        q = q.filter(Task.task_type == task_type)
+    if assignee_id:
+        q = q.filter(Task.assignee_id == assignee_id)
+    if priority:
+        q = q.filter(Task.priority == priority)
     if upcoming_days:
         until = datetime.now(timezone.utc) + timedelta(days=upcoming_days)
         q = q.filter(or_(Task.due_at.is_(None), Task.due_at <= until))
     rows = q.order_by(
-        Task.status != "arquivado",
+        Task.status == "done",  # concluídas no fim
         Task.due_at.asc().nullslast(),
         Task.id.desc(),
     ).all()
@@ -163,9 +176,12 @@ def update_task(task_id: int, payload: TaskUpdate, db: Session = Depends(get_db)
     if not t:
         raise HTTPException(404, "task not found")
     data = payload.model_dump(exclude_unset=True)
-    # Auto-set completed_at quando status vira "publicado"
-    if data.get("status") == "publicado" and not t.completed_at:
+    # Auto-set completed_at quando status vira "done"
+    if data.get("status") == "done" and not t.completed_at:
         data["completed_at"] = datetime.now(timezone.utc)
+    # Se tirou de done, limpa completed_at
+    if "status" in data and data["status"] != "done" and t.completed_at:
+        data["completed_at"] = None
     for k, v in data.items():
         setattr(t, k, v)
     db.add(t); db.commit(); db.refresh(t)
