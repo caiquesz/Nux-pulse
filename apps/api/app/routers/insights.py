@@ -620,10 +620,17 @@ def meta_pacing(
 @router.get("/{slug}/meta/alerts")
 def meta_alerts(slug: str, db: Session = Depends(get_db)):
     """Deriva alertas das últimas 2 semanas:
-    - fatigue: CTR caiu >30% na última semana vs. semana anterior (por campanha ativa)
+
+    Por campanha:
+    - fatigue: CTR caiu >30% na última semana vs. semana anterior
     - cpc_spike: CPC dobrou na última semana
-    - budget_underpace: spend < 50% do esperado últimos 7d
+    - underpace: spend < 50% do esperado últimos 7d
     - no_spend: campanha ATIVA sem gasto nos últimos 3 dias
+
+    Conta inteira:
+    - leads_drop / messages_drop: conversões caíram >=30% vs. semana anterior
+    - budget_exceeded: spend do mês já passou do monthly_budget do cliente
+    - budget_warning: spend do mês >=80% do monthly_budget (projeção perigosa)
     """
     c = _client_or_404(db, slug)
     today = date.today()
@@ -723,6 +730,72 @@ def meta_alerts(slug: str, db: Session = Depends(get_db)):
                     "message": "Campanha ativa sem gasto nos últimos 3 dias",
                     "detail": {"daily_budget": budget},
                 })
+
+    # ─── Alertas de CONTA (não atrelados a uma campanha) ─────────────────
+
+    # Pega linhas de conversão dos dois períodos de 7d (account level).
+    def _account_conv(start: date, end: date) -> dict:
+        rows = (
+            db.query(MetaInsightsDaily.actions, MetaInsightsDaily.action_values)
+            .filter(
+                MetaInsightsDaily.client_id == c.id,
+                MetaInsightsDaily.level == "account",
+                MetaInsightsDaily.breakdown_key == "none",
+                MetaInsightsDaily.date >= start,
+                MetaInsightsDaily.date < end,
+            )
+            .all()
+        )
+        return _aggregate_conversions(rows)
+
+    conv_last = _account_conv(last_week_start, today + timedelta(days=1))
+    conv_prev = _account_conv(prev_week_start, last_week_start)
+
+    # Queda de leads / mensagens — só alerta se já tinha volume mínimo semana
+    # anterior (>=10) pra evitar ruído em contas pequenas.
+    for bucket, label in (("leads", "Leads"), ("messages", "Mensagens")):
+        prev_v = conv_prev.get(bucket, 0)
+        cur_v = conv_last.get(bucket, 0)
+        if prev_v >= 10 and cur_v < prev_v * 0.7:
+            drop_pct = (1 - cur_v / prev_v) * 100 if prev_v else 0
+            alerts.append({
+                "severity": "warn", "kind": f"{bucket}_drop",
+                "campaign_id": "", "campaign_name": "Conta · últimos 7d",
+                "message": f"{label} caíram {drop_pct:.0f}% vs. semana anterior ({prev_v} → {cur_v})",
+                "detail": {"prev_7d": prev_v, "last_7d": cur_v},
+            })
+
+    # Orçamento mensal do cliente excedido — compara spend do mês corrente
+    # (dia 1 → hoje) com `client.monthly_budget`.
+    if c.monthly_budget and float(c.monthly_budget) > 0:
+        month_start = today.replace(day=1)
+        month_spend = float(
+            db.query(func.coalesce(func.sum(MetaInsightsDaily.spend), 0))
+            .filter(
+                MetaInsightsDaily.client_id == c.id,
+                MetaInsightsDaily.level == "account",
+                MetaInsightsDaily.breakdown_key == "none",
+                MetaInsightsDaily.date >= month_start,
+                MetaInsightsDaily.date <= today,
+            )
+            .scalar() or 0
+        )
+        budget = float(c.monthly_budget)
+        ratio = month_spend / budget if budget > 0 else 0
+        if ratio >= 1.0:
+            alerts.append({
+                "severity": "neg", "kind": "budget_exceeded",
+                "campaign_id": "", "campaign_name": "Conta · mês corrente",
+                "message": f"Orçamento excedido — gastou R$ {month_spend:,.2f} de R$ {budget:,.2f} ({ratio*100:.0f}%)".replace(",", "_").replace(".", ",").replace("_", "."),
+                "detail": {"spend_month": round(month_spend, 2), "monthly_budget": budget, "pct": round(ratio * 100, 1)},
+            })
+        elif ratio >= 0.8:
+            alerts.append({
+                "severity": "warn", "kind": "budget_warning",
+                "campaign_id": "", "campaign_name": "Conta · mês corrente",
+                "message": f"Orçamento em {ratio*100:.0f}% — R$ {month_spend:,.2f} de R$ {budget:,.2f}".replace(",", "_").replace(".", ",").replace("_", "."),
+                "detail": {"spend_month": round(month_spend, 2), "monthly_budget": budget, "pct": round(ratio * 100, 1)},
+            })
 
     # ordena: neg > warn > info
     sev_rank = {"neg": 0, "warn": 1, "info": 2}
