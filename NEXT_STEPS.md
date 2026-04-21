@@ -1,92 +1,126 @@
-# NUX Pulse — próximos passos
+# NUX Pulse — estado + próximos passos
 
-Status do sistema em **2026-04-20**. Todo o código de Fase 2 até Fase 6 está no ar. Algumas ações dependem de você.
+Atualizado **2026-04-21**. Tudo deployado em https://nux-pulse.vercel.app .
 
 ---
 
-## ✅ Funcionando agora
+## ✅ Pronto (em produção)
 
-- **Fase 2 (Meta UI + Health)**: sync-health · meta (drill campanha→adset→ad) · creatives (grid com thumbs) · funnel
-- **Fase 5 (Analítica)**: pacing · alerts (CTR/CPC/budget/no-spend) · audience (age/gender) · geo-time (region/hour)
-- **Fase 6 (Relatórios)**: reports (print→PDF) · forecast (projeção linear vs. budget mensal)
-- **KPIs de conversão** no Overview: Mensagens · Leads · Compras · ROAS (+ custo unitário)
-- **Botão Sincronizar** no Overview e em Settings
-- **Sync automático de breakdowns** (age/gender/region/hour) — best-effort
+### Telas funcionais (substituindo placeholders)
+| Fase | Tela | Dados |
+|---|---|---|
+| 2 | Overview | KPIs reais + deltas WoW + chart com overlay de conversões |
+| 2 | Meta Ads | Drill campanhas → conjuntos → anúncios com filtros |
+| 2 | Criativos | Grid visual com thumbs + ranking por gasto |
+| 2 | Funil | Impressões → clique → LP → carrinho → compra |
+| 2 | Sync Health | Cobertura, reconciliação, gaps, erros, histórico de jobs |
+| 3 | Google Ads (stub) | Form conectar · aguardando ingest |
+| 4 | Search Terms (stub) | Aguardando ingest Google |
+| 5 | Pacing | Budget esperado × real por campanha |
+| 5 | Alerts | Fatigue / CPC spike / underpace / no spend |
+| 5 | Audiência | Breakdown idade × gênero |
+| 5 | Geo & Horário | Regiões top + heatmap por hora |
+| 6 | Reports | Relatório imprimível (Ctrl+P → PDF) |
+| 6 | Forecast | Projeção linear vs. budget mensal |
+| — | Settings | Conectar Meta / Google + sincronizar |
 
-## ⚠ Ações manuais do Caique
+### Confiabilidade dos dados
+- **Reconciliação**: `/meta/data-health` compara soma por breakdown vs soma base (tolera ±1%)
+- **Detecção de gaps**: dias sem dado listados
+- **Logs estruturados**: cada call Meta API loga URL + duração + rows
+- **Loop-breaker de paginação**: detecta cursor `after` repetido (bug conhecido Graph API)
+- **FK-safe upserts**: ads órfãos (referenciando creatives fora do paginate) são skipados, não travam a transação
+- **Job monitoring**: cleanup automático de zombies (`/sync/jobs/cleanup-stale`)
 
-### 1. Rotacionar o System User Token da Meta (URGENTE)
-O token vazou nos logs do Railway durante debug. Passos:
-1. Business Manager → System Users → [seu system user] → Generate Token
-2. Gera novo token com permissões `ads_read`, `business_management`
-3. Em https://nux-pulse.vercel.app/c/segredos-de-minas/settings, cola o novo token no form Meta → "Atualizar token"
-4. Faça "Sincronizar agora" pra validar
+### Auto-sync
+- **Vercel Cron** configurado: `/api/cron/sync` dispara backfill diário **05:00 UTC (02:00 BRT)**
+- Janela padrão: últimos 3 dias (cobre re-delivery / late events da Meta)
+- Protegido por `CRON_SECRET` (já setado em Railway + Vercel)
 
-### 2. Rotacionar `API_SECRET_KEY` do Railway
-Ainda com valor placeholder. Como essa chave criptografa os tokens Meta/Google no DB, **trocar invalida os tokens salvos**.
+### KPIs do Overview
+Investimento · **Mensagens + CPM/msg** · **Leads + CPL** · **Compras + CPA** · **ROAS + Receita** · Impressões · Cliques · CTR. Cada card tem:
+- Valor atual
+- Sparkline (30 dias)
+- **Delta % vs período anterior** back-to-back (sem overlap)
+- Cor verde/vermelho conforme direção
+
+---
+
+## ⚠ Ações manuais suas (quando voltar)
+
+### 1. Rotacionar token Meta (URGENTE)
+O System User Token vazou em logs durante debug da paginação. Steps:
+1. Business Manager → System Users → Generate Token (permissões `ads_read`)
+2. Paste em https://nux-pulse.vercel.app/c/segredos-de-minas/settings → form Meta → Atualizar token
+3. Clique **Sincronizar** pra validar
+
+### 2. Rotacionar `API_SECRET_KEY`
+Ainda com valor placeholder. **Atenção**: essa chave criptografa os tokens Meta/Google no DB — trocar invalida os tokens salvos, precisa reconectar depois.
 ```bash
-# 1. Gera novo secret
-python -c "import secrets; print(secrets.token_urlsafe(48))"
-
-# 2. Seta no Railway
-railway variables --set "API_SECRET_KEY=<novo_valor>"
-
-# 3. Re-conecte Meta Ads e Google (os tokens vão precisar ser colados de novo pelo form)
+new_secret=$(python -c "import secrets;print(secrets.token_urlsafe(48))")
+railway variables --set "API_SECRET_KEY=$new_secret"
+# Depois re-conectar Meta em /settings (o token antigo não vai mais descriptografar)
 ```
 
-### 3. Conectar Google Ads (quando quiser Fase 3+4 real)
-O form em Settings aceita credenciais, mas a **ingestão** ainda não está implementada (só o scaffold). Quando for ativar:
-1. Tenha: Developer Token (MCC) · Customer ID da conta-cliente · OAuth Client ID/Secret · Refresh Token
-2. Cola no form em Settings (chave "Google Ads")
-3. Implementar `apps/api/app/services/google/client.py::query(gaql)` com `google-ads` SDK
-4. Implementar `apps/api/app/services/google/ingest.py` (similar ao meta/ingest)
+### 3. Conectar Google Ads (opcional, quando quiser ativar)
+Form em Settings. Precisa de: Developer Token (MCC) · Customer ID · OAuth Client ID/Secret · Refresh Token. As credenciais ficam criptografadas no DB. **A ingestão de Google Ads ainda é stub** — quando ativar, implementar `apps/api/app/services/google/{client.py,ingest.py}`.
 
-### 4. Configurar cron diário
-BackgroundTasks do FastAPI morre a cada deploy — você vai perder jobs longos.
-**Mais simples**: Cron Schedule no Railway
-1. Railway → New Service → Cron Schedule
-2. Conecta ao mesmo GitHub
-3. Cron expression: `0 2 * * *` (2h BRT)
-4. Command: `curl -X POST https://nux-pulse-production.up.railway.app/api/sync/meta/segredos-de-minas/backfill -H "Content-Type: application/json" -d '{"days":3,"level":"ad"}'`
-
-**Melhor (quando escalar)**: Celery worker no Railway + Redis (precisa adicionar `worker` como service separado + `redis` plugin).
-
-### 5. Limpar jobs zumbis
-Jobs #1, #2, #6, #7, #8 ficaram com `status=running` eterno (foram interrompidos por deploys). Não atrapalham, mas poluem a tabela. Execute no SQL do Supabase:
-```sql
-UPDATE sync_jobs
-SET status = 'error',
-    error_message = 'zombie: deploy interrompeu',
-    finished_at = now()
-WHERE status = 'running' AND started_at < now() - interval '10 minutes';
-```
+### 4. Adicionar mais clientes
+Home → **+ Novo cliente** → preenche slug, nome, budget mensal, cor. Depois conecta Meta em Settings e dispara Sync.
 
 ---
 
-## 📊 Arquitetura atual
+## 🛠 Arquitetura
 
 ```
-┌────────────────────┐       ┌─────────────────────────┐
-│ Vercel             │ HTTPS │ Railway                 │
-│ (Next 16 + React)  │──────▶│ (FastAPI + uvicorn)     │
-│ nux-pulse.vercel   │       │ nux-pulse-production    │
-│   .app             │       │   .up.railway.app       │
-└────────────────────┘       └──────────┬──────────────┘
-                                        │
-                                        ▼
-                             ┌─────────────────────────┐
-                             │ Supabase                │
-                             │ (Postgres 16)           │
-                             │ jscpmvlilqgmkicxmgeg    │
-                             └─────────────────────────┘
+Vercel (Next 16)  ──HTTPS──▶  Railway (FastAPI)  ──SQL──▶  Supabase (Postgres)
+     │                              │
+     └─ Vercel Cron ──────┘
+        05:00 UTC diário → /api/cron/sync → /api/sync/all
 ```
 
-**Custo mensal estimado:** $0 (Vercel Hobby + Railway $5 free credit + Supabase Free tier). Dobra quando passar os limites free — ainda &lt;$30/mês.
+### Endpoints críticos
+- `GET  /api/clients` · `POST /api/clients`
+- `GET  /api/clients/{slug}/connections` · `POST /api/clients/{slug}/connections/{meta|google}`
+- `POST /api/sync/meta/{slug}/backfill`  — dispara manual (body: `{days, level}`)
+- `POST /api/sync/all` — cron-friendly, dispara pra todos (header: `X-Cron-Secret`)
+- `GET  /api/sync/jobs` · `POST /api/sync/jobs/cleanup-stale`
+- `GET  /api/clients/{slug}/meta/overview` — KPIs + deltas
+- `GET  /api/clients/{slug}/meta/data-health` — auditoria
+- `GET  /api/clients/{slug}/meta/{campaigns,adsets,ads,creatives,funnel,pacing,alerts,audience,geo-time}`
+- `GET  /api/sync/meta/{slug}/diagnose` — health-check rápido da Meta API
 
-## 🗺 O que falta pra produção real
+---
 
-- **Auth**: qualquer um com a URL pode ver tudo. Adicionar login simples (Supabase Auth ou Clerk) antes de expor a URL.
-- **Multi-tenant**: hoje cada cliente da agência é um `Client` no DB, mas sem isolamento forte. Checar antes de onboard segundo cliente.
-- **Exportação de PDF real** (hoje é só `window.print()`): serveless com Puppeteer ou usar Browserless.
-- **Monitoring/Alertas externos**: usar Sentry pra erros de API e Better Uptime pra uptime checks.
-- **Backup explícito do DB**: Supabase faz backup mas só 7 dias no free tier — considerar export diário.
+## 🔮 Pendências de produto (backlog)
+
+**Alto valor:**
+- **Auth real** (Supabase Auth ou Clerk) — hoje qualquer URL vê tudo
+- **Google Ads ingest completo** (SDK google-ads, GAQL queries) — stub está pronto
+- **Multi-account**: seletor já existe, falta isolar queries por workspace
+
+**Médio:**
+- Export real de PDF (Puppeteer serveless ou Browserless)
+- Monitoring externo (Sentry pra erros, Better Uptime pra uptime)
+- Attribution windows configuráveis (1d/7d/28d click) — requer param na Meta API
+- Comparação manual de períodos (today vs last year, etc.)
+- Webhooks da Meta pra receber updates realtime (vs polling)
+
+**Baixo mas bom:**
+- Modo dark/light toggle (já existe parcial no design system)
+- Keyboard shortcuts (⌘K pra buscar conta)
+- Email digest semanal automático
+- Slack integration pra alertas críticos
+
+---
+
+## 💰 Custo
+
+| Serviço | Plano | Preço/mês |
+|---|---|---|
+| Vercel | Hobby | R$ 0 |
+| Railway | Starter | R$ 25 (~$5) depois dos créditos |
+| Supabase | Free | R$ 0 (até 500MB DB + 1GB transfer) |
+| **Total** | | **~R$ 25/mês** |
+
+Escalando (quando passar de 5-10 clientes + sync contínua): migrar Railway pra plano "Developer" (~R$ 100/mês) e Supabase pra Pro (~R$ 130/mês). Total ~R$ 250/mês.
