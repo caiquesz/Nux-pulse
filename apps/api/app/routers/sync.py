@@ -1,6 +1,7 @@
 """Endpoints de sincronização — disparar backfills e inspecionar jobs."""
 import time
 import traceback
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
@@ -125,6 +126,25 @@ def diagnose_meta(slug: str, db: Session = Depends(get_db)):
             "message": str(e)[:500],
             "trace": traceback.format_exc()[:800],
         }
+
+
+@router.post("/jobs/cleanup-stale")
+def cleanup_stale_jobs(max_age_minutes: int = 15, db: Session = Depends(get_db)):
+    """Marca como 'error' os jobs que ficaram em 'running' por mais de `max_age_minutes`.
+    Útil pra limpar zumbis depois de deploys/restarts (BackgroundTasks do FastAPI morre com o processo)."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
+    stale = (
+        db.query(SyncJob)
+        .filter(SyncJob.status == "running", SyncJob.started_at < cutoff)
+        .all()
+    )
+    for j in stale:
+        j.status = "error"
+        j.error_message = f"auto-expired: job ran longer than {max_age_minutes}m (likely killed by deploy/restart)"
+        j.finished_at = datetime.now(timezone.utc)
+        db.add(j)
+    db.commit()
+    return {"cleaned": len(stale), "ids": [j.id for j in stale]}
 
 
 @router.get("/jobs", response_model=list[JobRead])
