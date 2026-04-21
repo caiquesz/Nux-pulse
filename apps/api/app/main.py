@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import clients, health, insights, sync
+from app.routers import clients, health, insights, project, sync
 
 app = FastAPI(
     title="NUX Pulse API",
@@ -22,6 +22,7 @@ app.include_router(health.router)
 app.include_router(clients.router)
 app.include_router(sync.router)
 app.include_router(insights.router)
+app.include_router(project.router)
 
 
 @app.get("/")
