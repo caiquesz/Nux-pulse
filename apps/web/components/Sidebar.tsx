@@ -26,6 +26,7 @@ const NAV: NavGroup[] = [
     { id: "forecast",     label: "Forecast",     icon: "forecast" },
   ]},
   { group: "Cliente", items: [
+    { id: "project",  label: "Planejamento", icon: "pacing" },
     { id: "reports",  label: "Relatórios", icon: "report" },
     { id: "settings", label: "Configurações", icon: "gear" },
   ]},

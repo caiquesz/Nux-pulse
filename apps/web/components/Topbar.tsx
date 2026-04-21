@@ -2,6 +2,7 @@
 import { usePathname } from "next/navigation";
 import { Icon } from "./icons/Icon";
 import { AccountSwitcher } from "./AccountSwitcher";
+import { NotificationsBell } from "./NotificationsBell";
 
 const CRUMBS: Record<string, string[]> = {
   overview:      ["DASHBOARDS", "VISÃO GERAL"],
@@ -15,6 +16,7 @@ const CRUMBS: Record<string, string[]> = {
   pacing:        ["ANÁLISE", "PACING"],
   alerts:        ["ANÁLISE", "ALERTAS"],
   forecast:      ["ANÁLISE", "FORECAST"],
+  project:       ["CLIENTE", "PLANEJAMENTO"],
   reports:       ["CLIENTE", "RELATÓRIOS"],
   settings:      ["CLIENTE", "CONFIGURAÇÕES"],
   "sync-health": ["SISTEMA", "SYNC HEALTH"],
@@ -57,13 +59,7 @@ export function Topbar({ slug, theme, onToggleTheme, onOpenTweaks }: Props) {
         <Icon name={theme === "light" ? "moon" : "sun"} size={14} />
       </button>
 
-      <button className="icon-btn" style={{ position: "relative" }} title="Alertas">
-        <Icon name="bell" size={14} />
-        <span style={{
-          position: "absolute", top: 6, right: 6, width: 6, height: 6, borderRadius: "50%",
-          background: "var(--warn)", border: "1.5px solid var(--surface)",
-        }} />
-      </button>
+      <NotificationsBell />
 
       <button className="icon-btn" onClick={onOpenTweaks} title="Tweaks">
         <Icon name="sliders" size={14} />

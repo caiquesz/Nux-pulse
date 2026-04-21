@@ -299,3 +299,160 @@ export const triggerMetaBackfill = (slug: string, body: BackfillPayload) =>
     `/api/sync/meta/${slug}/backfill`,
     { level: "ad", ...body }
   );
+
+// ═════════════════════════════════════════════════════════════════════════
+//  PLANEJAMENTO — Tarefas + Arquivos + Notificações + Equipe
+// ═════════════════════════════════════════════════════════════════════════
+
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const r = await fetch(`${BASE}${path}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+  if (!r.ok) throw new Error(`${r.status} ${path} — ${(await r.text()).slice(0, 300)}`);
+  return r.json() as Promise<T>;
+}
+
+async function del(path: string): Promise<void> {
+  const r = await fetch(`${BASE}${path}`, { method: "DELETE", cache: "no-store" });
+  if (!r.ok && r.status !== 204) throw new Error(`${r.status} ${path}`);
+}
+
+// ── Team ────────────────────────────────────────────────────────────────
+export type TeamMember = {
+  id: number; email: string; name: string;
+  role: string | null; avatar_color: string | null; is_active: boolean;
+};
+export const listTeam = () => get<TeamMember[]>("/api/team");
+export const createMember = (body: Omit<TeamMember, "id" | "is_active">) =>
+  post<TeamMember>("/api/team", body);
+export const updateMember = (id: number, body: Partial<TeamMember>) =>
+  patch<TeamMember>(`/api/team/${id}`, body);
+
+// ── Tasks ───────────────────────────────────────────────────────────────
+export type TaskStatus = "briefing" | "producao" | "aprovacao" | "publicado" | "arquivado";
+export type TaskPriority = "baixa" | "media" | "alta" | "urgente";
+export type TaskScope = "cliente" | "interno";
+
+export type Task = {
+  id: number;
+  client_id: number;
+  title: string;
+  description: string | null;
+  due_at: string | null;
+  duration_min: number | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  scope: TaskScope;
+  assignee_id: number | null;
+  assignee_name: string | null;
+  assignee_color: string | null;
+  ai_scheduled: boolean;
+  ai_context: string | null;
+  completed_at: string | null;
+  created_at: string;
+};
+
+export type TaskCreate = {
+  title: string;
+  description?: string | null;
+  due_at?: string | null;
+  duration_min?: number | null;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  scope?: TaskScope;
+  assignee_id?: number | null;
+  ai_scheduled?: boolean;
+  ai_context?: string | null;
+};
+
+export const listTasks = (slug: string, status?: TaskStatus, upcomingDays?: number) => {
+  const q = new URLSearchParams();
+  if (status) q.set("status", status);
+  if (upcomingDays) q.set("upcoming_days", String(upcomingDays));
+  const qs = q.toString();
+  return get<Task[]>(`/api/clients/${slug}/tasks${qs ? `?${qs}` : ""}`);
+};
+export const createTask = (slug: string, body: TaskCreate) =>
+  post<Task>(`/api/clients/${slug}/tasks`, body);
+export const updateTask = (id: number, body: Partial<TaskCreate & { completed_at?: string | null }>) =>
+  patch<Task>(`/api/tasks/${id}`, body);
+export const deleteTask = (id: number) => del(`/api/tasks/${id}`);
+
+// ── Files ───────────────────────────────────────────────────────────────
+export type FileCategory = "briefing" | "id_visual" | "fluxograma" | "relatorio" | "contrato" | "outros";
+
+export type ClientFile = {
+  id: number;
+  client_id: number;
+  name: string;
+  storage_path: string | null;
+  external_url: string | null;
+  category: FileCategory;
+  mime_type: string | null;
+  size_bytes: number | null;
+  description: string | null;
+  uploaded_by_id: number | null;
+  uploaded_by_name: string | null;
+  created_at: string;
+  download_url: string | null;
+};
+
+export const listFiles = (slug: string, category?: FileCategory) => {
+  const q = category ? `?category=${category}` : "";
+  return get<ClientFile[]>(`/api/clients/${slug}/files${q}`);
+};
+
+export const uploadFile = async (
+  slug: string,
+  file: File,
+  category: FileCategory = "outros",
+  description?: string,
+  uploadedById?: number,
+): Promise<ClientFile> => {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("category", category);
+  if (description) fd.append("description", description);
+  if (uploadedById) fd.append("uploaded_by_id", String(uploadedById));
+  const r = await fetch(`${BASE}/api/clients/${slug}/files`, { method: "POST", body: fd, cache: "no-store" });
+  if (!r.ok) throw new Error(`${r.status} ${(await r.text()).slice(0, 300)}`);
+  return r.json();
+};
+
+export const addExternalFile = (slug: string, body: { name: string; external_url: string; category?: FileCategory; description?: string | null }) =>
+  post<ClientFile>(`/api/clients/${slug}/files/external`, body);
+
+export const updateFile = (id: number, body: { name?: string; category?: FileCategory; description?: string | null }) =>
+  patch<ClientFile>(`/api/files/${id}`, body);
+export const deleteFile = (id: number) => del(`/api/files/${id}`);
+
+// ── Notifications ───────────────────────────────────────────────────────
+export type Notification = {
+  id: number;
+  recipient_id: number | null;
+  client_id: number | null;
+  client_slug: string | null;
+  kind: string;
+  title: string;
+  body: string | null;
+  link_url: string | null;
+  ref_type: string | null;
+  ref_id: number | null;
+  read_at: string | null;
+  created_at: string;
+};
+
+export const listNotifications = (unreadOnly = false, limit = 30) => {
+  const q = new URLSearchParams();
+  if (unreadOnly) q.set("unread_only", "true");
+  q.set("limit", String(limit));
+  return get<Notification[]>(`/api/notifications?${q.toString()}`);
+};
+export const countUnread = () => get<{ count: number }>("/api/notifications/count");
+export const markNotificationRead = (id: number) =>
+  post<{ ok: boolean }>(`/api/notifications/${id}/read`, {});
+export const markAllNotificationsRead = () =>
+  post<{ updated: number }>("/api/notifications/mark-all-read", {});
