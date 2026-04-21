@@ -129,9 +129,23 @@ export function TasksTab({ slug }: { slug: string }) {
       setShowForm(false);
     },
   });
+  // Optimistic update — a UI muda imediatamente ao arrastar, sem esperar
+  // o server. Em caso de erro, faz rollback. Resolve o "lag" percebido.
   const updateMut = useMutation({
     mutationFn: ({ id, patch }: { id: number; patch: Partial<TaskCreate> }) => updateTask(id, patch),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks", slug] }),
+    onMutate: async ({ id, patch }) => {
+      await qc.cancelQueries({ queryKey: ["tasks", slug] });
+      const snapshots = qc.getQueriesData<Task[]>({ queryKey: ["tasks", slug] });
+      qc.setQueriesData<Task[]>({ queryKey: ["tasks", slug] }, (old) => {
+        if (!old) return old;
+        return old.map((t) => (t.id === id ? { ...t, ...patch } as Task : t));
+      });
+      return { snapshots };
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.snapshots?.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["tasks", slug] }),
   });
   const editMut = useMutation({
     mutationFn: ({ id, patch }: { id: number; patch: Partial<TaskCreate> }) => updateTask(id, patch),
@@ -332,11 +346,14 @@ function KanbanBoard({
   return (
     <div style={{
       display: "grid",
-      gridTemplateColumns: "repeat(4, minmax(240px, 1fr))",
-      gap: 12,
+      gridTemplateColumns: "repeat(4, minmax(260px, 1fr))",
+      gap: 14,
       marginTop: 16,
+      // Ocupa tudo até o fim da página. O valor compensa topbar + page-head + toolbar + chips.
+      minHeight: "calc(100vh - 360px)",
+      alignItems: "stretch",
       overflowX: "auto",
-      paddingBottom: 4,
+      paddingBottom: 2,
     }}>
       {STATUS_ORDER.map((st) => {
         const col = tasks.filter((t) => t.status === st);
@@ -345,8 +362,12 @@ function KanbanBoard({
         return (
           <div
             key={st}
-            onDragOver={(e) => { e.preventDefault(); setOverCol(st); }}
-            onDragLeave={() => setOverCol((c) => (c === st ? null : c))}
+            onDragOver={(e) => { e.preventDefault(); if (overCol !== st) setOverCol(st); }}
+            onDragLeave={(e) => {
+              // só limpa se saiu do container pra algo fora (não pra filho)
+              const to = e.relatedTarget as Node | null;
+              if (!e.currentTarget.contains(to)) setOverCol((c) => (c === st ? null : c));
+            }}
             onDrop={(e) => {
               e.preventDefault();
               setOverCol(null);
@@ -354,24 +375,46 @@ function KanbanBoard({
               if (id && Number.isFinite(id)) onChangeStatus(id, st);
             }}
             style={{
-              background: isOver ? "var(--surface-2)" : "var(--surface)",
-              border: `1px solid ${isOver ? "var(--ink-2)" : "var(--border)"}`,
-              borderRadius: 10, padding: 10,
-              minHeight: 280,
-              display: "flex", flexDirection: "column", gap: 8,
-              transition: "background .12s, border-color .12s",
+              background: "var(--surface)",
+              border: `1px solid ${isOver ? cfg.color : "var(--border)"}`,
+              boxShadow: isOver ? `inset 0 0 0 1px ${cfg.color}33` : "none",
+              borderRadius: 12,
+              display: "flex", flexDirection: "column",
+              transition: "border-color .12s, box-shadow .12s",
+              minHeight: 0,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 4px" }}>
+            {/* Header da coluna */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 8,
+              padding: "12px 14px",
+              borderBottom: "1px solid var(--border)",
+            }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color }} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--ink)", letterSpacing: 0.2 }}>
+              <span style={{
+                fontSize: 11, fontWeight: 600, color: "var(--ink)",
+                letterSpacing: 0.3, textTransform: "uppercase",
+                fontFamily: "var(--font-mono)",
+              }}>
                 {cfg.label}
               </span>
-              <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: "auto" }}>
+              <span className="mono" style={{
+                marginLeft: "auto",
+                fontSize: 10, color: "var(--ink-4)",
+                padding: "1px 7px", borderRadius: 999,
+                background: "var(--surface-2)",
+                fontVariantNumeric: "tabular-nums", fontWeight: 600,
+              }}>
                 {col.length}
               </span>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+
+            {/* Corpo da coluna */}
+            <div style={{
+              display: "flex", flexDirection: "column", gap: 8,
+              padding: 10, flex: 1,
+              overflowY: "auto",
+            }}>
               {col.map((t) => (
                 <KanbanCard
                   key={t.id}
@@ -380,17 +423,19 @@ function KanbanBoard({
                   onDelete={() => onDelete(t.id)}
                 />
               ))}
-              {col.length === 0 && (
-                <div style={{
-                  flex: 1, minHeight: 80,
-                  border: "1px dashed var(--border-2)", borderRadius: 8,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, color: "var(--ink-4)", fontFamily: "var(--font-mono)",
-                  letterSpacing: 0.5, textTransform: "uppercase",
-                }}>
-                  arraste aqui
-                </div>
-              )}
+              {/* Zona de drop sempre visível (fica mais evidente quando hover) */}
+              <div
+                aria-hidden
+                style={{
+                  flex: 1,
+                  minHeight: col.length === 0 ? 120 : 60,
+                  marginTop: col.length === 0 ? 0 : 2,
+                  borderRadius: 6,
+                  background: isOver ? `${cfg.color}0f` : "transparent",
+                  border: isOver ? `1px dashed ${cfg.color}` : "1px dashed transparent",
+                  transition: "background .12s, border-color .12s",
+                }}
+              />
             </div>
           </div>
         );
