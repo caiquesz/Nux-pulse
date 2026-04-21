@@ -5,6 +5,7 @@ description = "NUX Pulse — Marketing analytics API"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
+    "python-multipart>=0.0.18",
     "uvicorn[standard]>=0.32",
     "sqlalchemy>=2.0.36",
     "psycopg[binary]>=3.2",
