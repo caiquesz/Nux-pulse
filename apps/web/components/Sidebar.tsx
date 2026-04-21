@@ -1,9 +1,12 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+
+import { metaAlerts } from "@/lib/api";
 import { Icon, NuxBars, type IconName } from "./icons/Icon";
 
-type NavItem = { id: string; label: string; icon: IconName; badge?: string };
+type NavItem = { id: string; label: string; icon: IconName };
 type NavGroup = { group: string; items: NavItem[] };
 
 const NAV: NavGroup[] = [
@@ -19,7 +22,7 @@ const NAV: NavGroup[] = [
     { id: "search-terms", label: "Search Terms", icon: "terms" },
     { id: "geo-time",     label: "Geo & Horário",icon: "geo" },
     { id: "pacing",       label: "Pacing",       icon: "pacing" },
-    { id: "alerts",       label: "Alertas",      icon: "alerts", badge: "3" },
+    { id: "alerts",       label: "Alertas",      icon: "alerts" },
     { id: "forecast",     label: "Forecast",     icon: "forecast" },
   ]},
   { group: "Cliente", items: [
@@ -40,6 +43,18 @@ type Props = {
 export function Sidebar({ slug, collapsed, onToggle }: Props) {
   const pathname = usePathname();
   const current = pathname.split("/").pop() ?? "overview";
+
+  // Badge de "Alertas" = número de alertas reais do cliente atual (API).
+  // staleTime 60s pra não martelar o endpoint a cada navegação.
+  const alertsQ = useQuery({
+    queryKey: ["meta-alerts", slug],
+    queryFn: () => metaAlerts(slug),
+    enabled: !!slug,
+    staleTime: 60_000,
+  });
+  const alertCount = alertsQ.data?.alerts.length ?? 0;
+  const badgeFor = (id: string): string | null =>
+    id === "alerts" && alertCount > 0 ? String(alertCount) : null;
 
   return (
     <aside className="sidebar">
@@ -94,6 +109,7 @@ export function Sidebar({ slug, collapsed, onToggle }: Props) {
           {!collapsed && <div className="sb-group-label">{g.group}</div>}
           {g.items.map((it) => {
             const active = current === it.id;
+            const badge = badgeFor(it.id);
             return (
               <Link
                 key={it.id}
@@ -103,7 +119,7 @@ export function Sidebar({ slug, collapsed, onToggle }: Props) {
               >
                 <span className="sb-ic"><Icon name={it.icon} size={16} /></span>
                 {!collapsed && <span className="sb-label">{it.label}</span>}
-                {!collapsed && it.badge && <span className="sb-badge dot-warn">{it.badge}</span>}
+                {!collapsed && badge && <span className="sb-badge dot-warn">{badge}</span>}
               </Link>
             );
           })}
