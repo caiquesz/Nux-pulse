@@ -35,40 +35,66 @@ def _window(days: int, since: str | None = None, until: str | None = None) -> tu
     return u - timedelta(days=days), u
 
 
-# Mapa de action_types → "bucket" lógico. A Meta manda vários tipos diferentes
-# dependendo do objetivo/configuração da campanha; consolidamos em 3 conceitos.
-MESSAGE_TYPES = {
-    "onsite_conversion.messaging_first_reply",
-    "onsite_conversion.messaging_conversation_started_7d",
-    "onsite_conversion.total_messaging_connection",
-}
-LEAD_TYPES = {
+# Action types canônicos.
+#
+# A Meta manda o MESMO evento em múltiplos action_types simultaneamente:
+# uma conversa inicia pelo Ads gera "messaging_conversation_started_7d" +
+# "total_messaging_connection" + "messaging_first_reply" — e somando vira
+# 3× o número real. A forma correta é escolher UM canônico por métrica.
+#
+# Para métricas onde existem vários tipos possíveis (pixel vs CAPI vs onsite),
+# usamos ordem de preferência e pegamos o primeiro que existir nos dados.
+
+# Mensagens iniciadas — SEMPRE o tipo com janela de atribuição 7d.
+MESSAGE_TYPE = "onsite_conversion.messaging_conversation_started_7d"
+
+# Leads — "lead" agrega tudo; se não existir, cai nas variações por fonte.
+LEAD_TYPES_RANKED = (
     "lead",
     "onsite_conversion.lead_grouped",
     "offsite_conversion.fb_pixel_lead",
+    "onsite_conversion.lead",
     "leadgen.other",
-}
-PURCHASE_TYPES = {
+)
+
+# Compras — "purchase" é agregado; senão escolhe em ordem de preferência.
+PURCHASE_TYPES_RANKED = (
     "purchase",
     "omni_purchase",
     "offsite_conversion.fb_pixel_purchase",
+    "onsite_conversion.purchase",
     "onsite_web_purchase",
-    "web_in_store_purchase",
-}
+)
 
 
-def _sum_action_bucket(actions: dict | None, keys: set[str]) -> float:
+def _pick_first(actions: dict | None, candidates: tuple[str, ...]) -> float:
+    """Retorna o valor do PRIMEIRO action_type presente (em ordem de preferência).
+
+    Evita double-counting: Meta reporta o mesmo evento sob vários rótulos
+    (`lead`, `onsite_conversion.lead`, `offsite_*_leads` — todos com o mesmo
+    valor), então somar = multiplicar o número real.
+    """
     if not actions:
         return 0.0
-    # soma tanto por key exata quanto por prefix ("messaging*")
-    total = 0.0
-    for k, v in actions.items():
-        if k in keys:
+    for k in candidates:
+        if k in actions:
             try:
-                total += float(v)
+                return float(actions[k])
             except (TypeError, ValueError):
-                pass
-    return total
+                continue
+    return 0.0
+
+
+def _pick_exact(actions: dict | None, key: str) -> float:
+    if not actions:
+        return 0.0
+    v = actions.get(key)
+    if v is None:
+        return 0.0
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _aggregate_conversions(rows: list) -> dict:
@@ -78,10 +104,11 @@ def _aggregate_conversions(rows: list) -> dict:
     for r in rows:
         acts = r.actions if hasattr(r, "actions") else None
         vals = r.action_values if hasattr(r, "action_values") else None
-        messages += _sum_action_bucket(acts, MESSAGE_TYPES)
-        leads += _sum_action_bucket(acts, LEAD_TYPES)
-        purchases += _sum_action_bucket(acts, PURCHASE_TYPES)
-        revenue += _sum_action_bucket(vals, PURCHASE_TYPES)
+        messages += _pick_exact(acts, MESSAGE_TYPE)
+        leads += _pick_first(acts, LEAD_TYPES_RANKED)
+        purchases += _pick_first(acts, PURCHASE_TYPES_RANKED)
+        # revenue usa o mesmo type escolhido pra purchases
+        revenue += _pick_first(vals, PURCHASE_TYPES_RANKED)
     return {
         "messages": int(round(messages)),
         "leads": int(round(leads)),
