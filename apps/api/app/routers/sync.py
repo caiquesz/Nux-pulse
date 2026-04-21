@@ -1,10 +1,12 @@
 """Endpoints de sincronização — disparar backfills e inspecionar jobs."""
+import os
 import time
 import traceback
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt
@@ -159,6 +161,42 @@ def cleanup_stale_jobs(max_age_minutes: int = 15, db: Session = Depends(get_db))
         db.add(j)
     db.commit()
     return {"cleaned": len(stale), "ids": [j.id for j in stale]}
+
+
+@router.post("/all", status_code=202)
+def run_scheduled_sync(
+    days: int = 3,
+    level: str = "ad",
+    bg: BackgroundTasks = None,
+    x_cron_secret: str | None = Header(None, alias="X-Cron-Secret"),
+    db: Session = Depends(get_db),
+):
+    """Endpoint para cron externo (Vercel Cron, cron-job.org, GitHub Actions).
+    Dispara backfill pra TODAS as conexões ativas. Protegido pela env `CRON_SECRET`.
+
+    Uso típico: 1×/dia 02:00 BRT, days=3 (cobre re-delivery/late events da Meta)."""
+    expected = os.environ.get("CRON_SECRET")
+    if expected and x_cron_secret != expected:
+        raise HTTPException(401, "invalid cron secret")
+    # também tolera SEM secret configurado (dev/staging) pra não quebrar
+    if not expected:
+        pass
+
+    conns = (
+        db.query(AccountConnection)
+        .filter(AccountConnection.platform == Platform.meta, AccountConnection.tokens_enc.is_not(None))
+        .all()
+    )
+    dispatched = []
+    for conn in conns:
+        client = db.query(Client).filter(Client.id == conn.client_id, Client.is_active.is_(True)).first()
+        if not client:
+            continue
+        if bg is not None:
+            bg.add_task(_run_bg, client.id, conn.id, days, level)
+        dispatched.append({"client": client.slug, "connection_id": conn.id, "platform": "meta"})
+
+    return {"accepted": True, "dispatched": dispatched, "count": len(dispatched), "days": days, "level": level}
 
 
 @router.get("/jobs", response_model=list[JobRead])

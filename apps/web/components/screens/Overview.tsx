@@ -89,7 +89,7 @@ export function Overview() {
     enabled: !!slug,
   });
 
-  const kpis = useMemo(() => buildKpis(overviewQ.data), [overviewQ.data]);
+  const kpis = useMemo(() => buildKpis(overviewQ.data, dailyQ.data), [overviewQ.data, dailyQ.data]);
   const series = useMemo(() => (dailyQ.data?.series ?? []).map((p) => p.spend), [dailyQ.data]);
 
   // Escolhe a melhor métrica de conversão pra overlay no gráfico.
@@ -293,46 +293,91 @@ export function Overview() {
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────
-type Kpi = { label: string; value: string };
+type Kpi = { label: string; value: string; unit: string; delta: number; series: number[] };
 
-function buildKpis(o: MetaOverview | undefined): Kpi[] {
+function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[] {
+  const emptySeries: number[] = [];
   if (!o) {
     return [
-      { label: "Investimento", value: "—" },
-      { label: "Mensagens", value: "—" },
-      { label: "Leads", value: "—" },
-      { label: "Compras", value: "—" },
-      { label: "ROAS", value: "—" },
-      { label: "Impressões", value: "—" },
-      { label: "Cliques", value: "—" },
-      { label: "CTR", value: "—" },
+      { label: "Investimento", value: "—", unit: "BRL", delta: 0, series: emptySeries },
+      { label: "Mensagens", value: "—", unit: "", delta: 0, series: emptySeries },
+      { label: "Leads", value: "—", unit: "", delta: 0, series: emptySeries },
+      { label: "Compras", value: "—", unit: "", delta: 0, series: emptySeries },
+      { label: "ROAS", value: "—", unit: "x", delta: 0, series: emptySeries },
+      { label: "Impressões", value: "—", unit: "", delta: 0, series: emptySeries },
+      { label: "Cliques", value: "—", unit: "", delta: 0, series: emptySeries },
+      { label: "CTR", value: "—", unit: "%", delta: 0, series: emptySeries },
     ];
   }
 
-  // ROAS display: formato "3.2x" quando há receita; "—" quando spend=0
-  const roasLabel = o.roas > 0 ? `${o.roas.toFixed(2)}x` : (o.spend > 0 ? "—" : "—");
+  const series = daily?.series ?? [];
+  const spendSeries = series.map((p) => p.spend);
+  const msgSeries = series.map((p) => p.messages);
+  const leadSeries = series.map((p) => p.leads);
+  const purchaseSeries = series.map((p) => p.purchases);
+  const impSeries = series.map((p) => p.impressions);
+  const clkSeries = series.map((p) => p.clicks);
+
+  const d = o.deltas;
+  const roasLabel = o.roas > 0 ? `${o.roas.toFixed(2)}x` : "—";
 
   return [
-    { label: "Investimento", value: fmtBRL(o.spend) },
+    {
+      label: "Investimento",
+      value: fmtBRL(o.spend),
+      unit: "BRL",
+      delta: d.spend ?? 0,
+      series: spendSeries,
+    },
     {
       label: o.messages > 0 ? `Mensagens · R$${o.cost_per_message.toFixed(2)}/msg` : "Mensagens",
       value: fmtIntCompact(o.messages),
+      unit: "",
+      delta: d.messages ?? 0,
+      series: msgSeries,
     },
     {
       label: o.leads > 0 ? `Leads · R$${o.cost_per_lead.toFixed(2)}/lead` : "Leads",
       value: fmtIntCompact(o.leads),
+      unit: "",
+      delta: d.leads ?? 0,
+      series: leadSeries,
     },
     {
       label: o.purchases > 0 ? `Compras · R$${o.cost_per_purchase.toFixed(2)}/compra` : "Compras",
       value: fmtIntCompact(o.purchases),
+      unit: "",
+      delta: d.purchases ?? 0,
+      series: purchaseSeries,
     },
     {
       label: o.revenue > 0 ? `ROAS · ${fmtBRL(o.revenue)} receita` : "ROAS",
       value: roasLabel,
+      unit: "x",
+      delta: d.roas ?? 0,
+      series: purchaseSeries, // sem série própria pra ROAS; reaproveita compras
     },
-    { label: "Impressões", value: fmtIntCompact(o.impressions) },
-    { label: "Cliques", value: fmtIntCompact(o.clicks) },
-    { label: "CTR", value: fmtPct(o.ctr) },
+    {
+      label: "Impressões",
+      value: fmtIntCompact(o.impressions),
+      unit: "",
+      delta: d.impressions ?? 0,
+      series: impSeries,
+    },
+    {
+      label: "Cliques",
+      value: fmtIntCompact(o.clicks),
+      unit: "",
+      delta: d.clicks ?? 0,
+      series: clkSeries,
+    },
+    {
+      label: "CTR",
+      value: fmtPct(o.ctr),
+      unit: "%",
+      delta: d.ctr ?? 0,
+      series: impSeries, // aprox. usa impressões como proxy de atividade
+    },
   ];
 }
 

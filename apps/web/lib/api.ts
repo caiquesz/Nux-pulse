@@ -13,26 +13,22 @@ export type ClientRead = {
   is_active: boolean;
 };
 
+type MetaOverviewMetrics = {
+  spend: number; impressions: number; clicks: number; reach: number;
+  ctr: number; cpc: number;
+  messages: number; leads: number; purchases: number; revenue: number; roas: number;
+  cost_per_message: number; cost_per_lead: number; cost_per_purchase: number;
+};
+
 export type MetaOverview = {
   client: string;
   platform: "meta";
   period_days: number;
-  spend: number;
-  impressions: number;
-  clicks: number;
-  reach: number;
-  ctr: number;
-  cpc: number;
-  // Conversões
-  messages: number;
-  leads: number;
-  purchases: number;
-  revenue: number;
-  roas: number;
-  cost_per_message: number;
-  cost_per_lead: number;
-  cost_per_purchase: number;
-};
+  since: string;
+  until: string;
+  previous_period: MetaOverviewMetrics & { since: string; until: string };
+  deltas: Record<keyof MetaOverviewMetrics, number | null>;
+} & MetaOverviewMetrics;
 
 export type MetaCampaignRow = {
   id: string;
@@ -232,6 +228,26 @@ export type MetaFunnelResponse = {
 };
 export const metaFunnel = (slug: string, opts: RangeOpts = {}) =>
   get<MetaFunnelResponse>(`/api/clients/${slug}/meta/funnel?${rangeQuery(opts)}`);
+
+// Data health
+export type DataHealthResponse = {
+  client: string;
+  window: { since: string; until: string; days: number };
+  expected_days: number;
+  days_with_data: number;
+  gaps: string[];
+  reconciliations: Array<{
+    breakdown: string;
+    base_spend: number;
+    breakdown_spend: number;
+    diff_pct: number | null;
+    status: "ok" | "missing" | "drift";
+  }>;
+  last_successful_sync: { job_id: number; finished_at: string; rows_written: number } | null;
+  recent_errors: Array<{ id: number; error: string; when: string | null }>;
+};
+export const metaDataHealth = (slug: string, days = 30) =>
+  get<DataHealthResponse>(`/api/clients/${slug}/meta/data-health?days=${days}`);
 
 // Pacing
 export type PacingCampaign = {

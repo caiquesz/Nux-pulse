@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.db import get_db
 from app.models.client import Client
 from app.models.meta import MetaAd, MetaAdset, MetaCampaign, MetaCreative, MetaInsightsDaily
+from app.models.ops import SyncJob
 
 router = APIRouter(prefix="/api/clients", tags=["insights"])
 
@@ -99,47 +100,74 @@ def meta_overview(
 ):
     c = _client_or_404(db, slug)
     since_d, until_d = _window(days, since, until)
-    since, until = since_d, until_d  # reuso do nome nas queries abaixo
     period_days = (until_d - since_d).days + 1
-    agg = (
-        db.query(
-            func.coalesce(func.sum(MetaInsightsDaily.spend), 0).label("spend"),
-            func.coalesce(func.sum(MetaInsightsDaily.impressions), 0).label("impressions"),
-            func.coalesce(func.sum(MetaInsightsDaily.clicks), 0).label("clicks"),
-            func.coalesce(func.sum(MetaInsightsDaily.reach), 0).label("reach"),
-        )
-        .filter(
-            MetaInsightsDaily.client_id == c.id,
-            MetaInsightsDaily.level == "account",
-            MetaInsightsDaily.breakdown_key == "none",
-            MetaInsightsDaily.date >= since,
-            MetaInsightsDaily.date <= until,
-        )
-        .one()
-    )
-    spend = float(agg.spend or 0)
-    imps = int(agg.impressions or 0)
-    clks = int(agg.clicks or 0)
-    ctr = (clks / imps * 100) if imps else 0
-    cpc = (spend / clks) if clks else 0
 
-    # Conversions (messages/leads/purchases/revenue) vêm do JSONB actions/action_values.
-    conv_rows = (
-        db.query(MetaInsightsDaily.actions, MetaInsightsDaily.action_values)
-        .filter(
-            MetaInsightsDaily.client_id == c.id,
-            MetaInsightsDaily.level == "account",
-            MetaInsightsDaily.breakdown_key == "none",
-            MetaInsightsDaily.date >= since,
-            MetaInsightsDaily.date <= until,
+    def period_metrics(start: date, end: date) -> dict:
+        """Agrega KPIs no período e retorna dict completo com conversões e custos derivados."""
+        agg = (
+            db.query(
+                func.coalesce(func.sum(MetaInsightsDaily.spend), 0).label("spend"),
+                func.coalesce(func.sum(MetaInsightsDaily.impressions), 0).label("impressions"),
+                func.coalesce(func.sum(MetaInsightsDaily.clicks), 0).label("clicks"),
+                func.coalesce(func.sum(MetaInsightsDaily.reach), 0).label("reach"),
+            )
+            .filter(
+                MetaInsightsDaily.client_id == c.id,
+                MetaInsightsDaily.level == "account",
+                MetaInsightsDaily.breakdown_key == "none",
+                MetaInsightsDaily.date >= start,
+                MetaInsightsDaily.date <= end,
+            )
+            .one()
         )
-        .all()
-    )
-    conv = _aggregate_conversions(conv_rows)
-    roas = round(conv["revenue"] / spend, 4) if spend > 0 else 0.0
-    cost_per_msg = round(spend / conv["messages"], 2) if conv["messages"] else 0.0
-    cost_per_lead = round(spend / conv["leads"], 2) if conv["leads"] else 0.0
-    cost_per_purchase = round(spend / conv["purchases"], 2) if conv["purchases"] else 0.0
+        conv_rows = (
+            db.query(MetaInsightsDaily.actions, MetaInsightsDaily.action_values)
+            .filter(
+                MetaInsightsDaily.client_id == c.id,
+                MetaInsightsDaily.level == "account",
+                MetaInsightsDaily.breakdown_key == "none",
+                MetaInsightsDaily.date >= start,
+                MetaInsightsDaily.date <= end,
+            )
+            .all()
+        )
+        conv = _aggregate_conversions(conv_rows)
+        sp = float(agg.spend or 0)
+        im = int(agg.impressions or 0)
+        ck = int(agg.clicks or 0)
+        return {
+            "spend": sp,
+            "impressions": im,
+            "clicks": ck,
+            "reach": int(agg.reach or 0),
+            "ctr": round((ck / im * 100) if im else 0, 4),
+            "cpc": round((sp / ck) if ck else 0, 4),
+            "messages": conv["messages"],
+            "leads": conv["leads"],
+            "purchases": conv["purchases"],
+            "revenue": conv["revenue"],
+            "roas": round(conv["revenue"] / sp, 4) if sp > 0 else 0.0,
+            "cost_per_message": round(sp / conv["messages"], 2) if conv["messages"] else 0.0,
+            "cost_per_lead": round(sp / conv["leads"], 2) if conv["leads"] else 0.0,
+            "cost_per_purchase": round(sp / conv["purchases"], 2) if conv["purchases"] else 0.0,
+        }
+
+    current = period_metrics(since_d, until_d)
+    # Período anterior back-to-back, mesma duração
+    prev_until = since_d - timedelta(days=1)
+    prev_since = prev_until - timedelta(days=period_days - 1)
+    previous = period_metrics(prev_since, prev_until)
+
+    def delta_pct(cur: float, prev: float) -> float | None:
+        if prev <= 0:
+            return None
+        return round((cur - prev) / prev * 100, 2)
+
+    deltas = {k: delta_pct(current[k], previous[k]) for k in (
+        "spend", "impressions", "clicks", "reach", "ctr", "cpc",
+        "messages", "leads", "purchases", "revenue", "roas",
+        "cost_per_message", "cost_per_lead", "cost_per_purchase",
+    )}
 
     return {
         "client": slug,
@@ -147,20 +175,13 @@ def meta_overview(
         "period_days": period_days,
         "since": since_d.isoformat(),
         "until": until_d.isoformat(),
-        "spend": spend,
-        "impressions": imps,
-        "clicks": clks,
-        "reach": int(agg.reach or 0),
-        "ctr": round(ctr, 4),
-        "cpc": round(cpc, 4),
-        "messages": conv["messages"],
-        "leads": conv["leads"],
-        "purchases": conv["purchases"],
-        "revenue": conv["revenue"],
-        "roas": roas,
-        "cost_per_message": cost_per_msg,
-        "cost_per_lead": cost_per_lead,
-        "cost_per_purchase": cost_per_purchase,
+        **current,
+        "previous_period": {
+            "since": prev_since.isoformat(),
+            "until": prev_until.isoformat(),
+            **previous,
+        },
+        "deltas": deltas,
     }
 
 
@@ -748,6 +769,110 @@ def meta_geo_time(
         "period_days": (until_d - since_d).days + 1,
         "by_region": _breakdown_aggregate(db, c.id, "region", since_d, until_d),
         "by_hour": _breakdown_aggregate(db, c.id, "hourly_stats_aggregated_by_advertiser_time_zone", since_d, until_d),
+    }
+
+
+@router.get("/{slug}/meta/data-health")
+def meta_data_health(
+    slug: str,
+    days: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db),
+):
+    """Auditoria de confiabilidade dos dados:
+    - dias sem dado no período (gaps)
+    - reconciliação: soma por breakdown vs. soma sem breakdown (devem bater ±1%)
+    - última sincronização
+    - jobs com erro recente
+    """
+    c = _client_or_404(db, slug)
+    since_d, until_d = _window(days)
+
+    # 1. Gaps — dias esperados vs dias com dado
+    day_rows = (
+        db.query(MetaInsightsDaily.date)
+        .filter(
+            MetaInsightsDaily.client_id == c.id,
+            MetaInsightsDaily.level == "account",
+            MetaInsightsDaily.breakdown_key == "none",
+            MetaInsightsDaily.date >= since_d,
+            MetaInsightsDaily.date <= until_d,
+        )
+        .distinct()
+        .all()
+    )
+    days_with_data = {r.date for r in day_rows}
+    expected_days = {since_d + timedelta(days=i) for i in range((until_d - since_d).days + 1)}
+    gaps = sorted(d.isoformat() for d in (expected_days - days_with_data))
+
+    # 2. Reconciliação: soma do gasto sem breakdown vs soma por breakdown
+    base = (
+        db.query(func.coalesce(func.sum(MetaInsightsDaily.spend), 0))
+        .filter(
+            MetaInsightsDaily.client_id == c.id,
+            MetaInsightsDaily.level == "account",
+            MetaInsightsDaily.breakdown_key == "none",
+            MetaInsightsDaily.date >= since_d,
+            MetaInsightsDaily.date <= until_d,
+        )
+        .scalar() or 0
+    )
+    reconciliations = []
+    for bk in ("age", "gender", "region", "hourly_stats_aggregated_by_advertiser_time_zone"):
+        bk_total = (
+            db.query(func.coalesce(func.sum(MetaInsightsDaily.spend), 0))
+            .filter(
+                MetaInsightsDaily.client_id == c.id,
+                MetaInsightsDaily.level == "account",
+                MetaInsightsDaily.breakdown_key == bk,
+                MetaInsightsDaily.date >= since_d,
+                MetaInsightsDaily.date <= until_d,
+            )
+            .scalar() or 0
+        )
+        base_f = float(base)
+        bk_f = float(bk_total)
+        # diferença em %
+        diff_pct = round(abs(bk_f - base_f) / base_f * 100, 3) if base_f > 0 else None
+        ok = bk_f > 0 and diff_pct is not None and diff_pct < 1.0
+        reconciliations.append({
+            "breakdown": bk,
+            "base_spend": round(base_f, 2),
+            "breakdown_spend": round(bk_f, 2),
+            "diff_pct": diff_pct,
+            "status": "ok" if ok else ("missing" if bk_f == 0 else "drift"),
+        })
+
+    # 3. Última sync
+    last_sync = (
+        db.query(SyncJob)
+        .filter(SyncJob.client_id == c.id, SyncJob.platform == "meta", SyncJob.status == "done")
+        .order_by(SyncJob.finished_at.desc())
+        .first()
+    )
+    recent_errors = (
+        db.query(SyncJob)
+        .filter(SyncJob.client_id == c.id, SyncJob.platform == "meta", SyncJob.status == "error")
+        .order_by(SyncJob.id.desc())
+        .limit(5)
+        .all()
+    )
+
+    return {
+        "client": slug,
+        "window": {"since": since_d.isoformat(), "until": until_d.isoformat(), "days": days},
+        "expected_days": len(expected_days),
+        "days_with_data": len(days_with_data),
+        "gaps": gaps,
+        "reconciliations": reconciliations,
+        "last_successful_sync": {
+            "job_id": last_sync.id if last_sync else None,
+            "finished_at": last_sync.finished_at.isoformat() if last_sync and last_sync.finished_at else None,
+            "rows_written": last_sync.rows_written if last_sync else 0,
+        } if last_sync else None,
+        "recent_errors": [
+            {"id": j.id, "error": (j.error_message or "")[:200], "when": j.started_at.isoformat() if j.started_at else None}
+            for j in recent_errors
+        ],
     }
 
 

@@ -28,7 +28,7 @@ export function KpiCard({ kpi, active, onClick, chartStyle = "area" }: Props) {
         <span className="stat-value">{kpi.value}</span>
         <div className="stat-delta">
           <Delta value={kpi.delta} />
-          <span className="dim">vs 30d ant.</span>
+          <span className="dim">vs período ant.</span>
         </div>
         <div className="stat-spark">
           <Sparkline series={kpi.series} style={chartStyle} height={36} />
