@@ -4,10 +4,12 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 
 import {
+  createGoogleConnection,
   createMetaConnection,
   listConnections,
   listJobs,
   triggerMetaBackfill,
+  type GoogleConnectionPayload,
   type MetaConnectionPayload,
 } from "@/lib/api";
 
@@ -23,11 +25,48 @@ export default function SettingsPage() {
   });
 
   const metaConn = conns.data?.find((c) => c.platform === "meta");
+  const googleConn = conns.data?.find((c) => c.platform === "google");
 
   const [adAccount, setAdAccount] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [token, setToken] = useState("");
   const [justSaved, setJustSaved] = useState(false);
+
+  // Google connection state
+  const [gCustomerId, setGCustomerId] = useState("");
+  const [gDisplayName, setGDisplayName] = useState("");
+  const [gDevToken, setGDevToken] = useState("");
+  const [gClientId, setGClientId] = useState("");
+  const [gClientSecret, setGClientSecret] = useState("");
+  const [gRefreshToken, setGRefreshToken] = useState("");
+  const [gLoginCustomer, setGLoginCustomer] = useState("");
+  const [gJustSaved, setGJustSaved] = useState(false);
+
+  const saveGoogle = useMutation({
+    mutationFn: (body: GoogleConnectionPayload) => createGoogleConnection(slug, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["connections", slug] });
+      setGJustSaved(true);
+      setGDevToken("");
+      setGClientSecret("");
+      setGRefreshToken("");
+      setTimeout(() => setGJustSaved(false), 3000);
+    },
+  });
+
+  function submitGoogle(e: React.FormEvent) {
+    e.preventDefault();
+    if (!gCustomerId || !gDevToken || !gClientId || !gClientSecret || !gRefreshToken) return;
+    saveGoogle.mutate({
+      customer_id: gCustomerId.trim(),
+      display_name: gDisplayName.trim() || null,
+      developer_token: gDevToken.trim(),
+      oauth_client_id: gClientId.trim(),
+      oauth_client_secret: gClientSecret.trim(),
+      refresh_token: gRefreshToken.trim(),
+      login_customer_id: gLoginCustomer.trim() || null,
+    });
+  }
 
   const save = useMutation({
     mutationFn: (body: MetaConnectionPayload) => createMetaConnection(slug, body),
@@ -222,9 +261,129 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {/* ─── Google Ads ─── */}
+        <div className="card" style={{ padding: 24, marginTop: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600 }}>Google Ads</h2>
+            {googleConn ? (
+              <span className="tag" style={{ background: "var(--pos-bg)", color: "var(--pos)" }}>conectado</span>
+            ) : (
+              <span className="tag" style={{ background: "var(--surface-2)", color: "var(--ink-3)" }}>não conectado</span>
+            )}
+          </div>
+          <p style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 16 }}>
+            {googleConn
+              ? `Customer ID ${googleConn.external_account_id}. Preencha de novo pra rotacionar o refresh token.`
+              : "Cole as credenciais OAuth + Developer Token. Ingestão do Google Ads chega na Fase 3 — as credenciais ficam salvas aqui, prontas."}
+          </p>
+
+          <form onSubmit={submitGoogle} style={{ display: "grid", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Customer ID *</span>
+                <input
+                  value={gCustomerId}
+                  onChange={(e) => setGCustomerId(e.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="1234567890"
+                  required
+                  style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+                />
+              </label>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Login Customer ID (MCC)</span>
+                <input
+                  value={gLoginCustomer}
+                  onChange={(e) => setGLoginCustomer(e.target.value.replace(/[^0-9]/g, ""))}
+                  placeholder="opcional — ID da MCC gestora"
+                  style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+                />
+              </label>
+            </div>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Nome de exibição (opcional)</span>
+              <input
+                value={gDisplayName}
+                onChange={(e) => setGDisplayName(e.target.value)}
+                placeholder="Segredos de Minas — Google"
+                style={inputStyle}
+              />
+            </label>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                Developer Token *{" "}
+                <span style={{ color: "var(--ink-4)" }}>(Google Ads → Tools → API Center)</span>
+              </span>
+              <input
+                type="password"
+                value={gDevToken}
+                onChange={(e) => setGDevToken(e.target.value)}
+                placeholder="..."
+                required
+                style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+              />
+            </label>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>OAuth Client ID *</span>
+                <input
+                  value={gClientId}
+                  onChange={(e) => setGClientId(e.target.value)}
+                  placeholder="xxxx.apps.googleusercontent.com"
+                  required
+                  style={{ ...inputStyle, fontFamily: "var(--font-mono)", fontSize: 12 }}
+                />
+              </label>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>OAuth Client Secret *</span>
+                <input
+                  type="password"
+                  value={gClientSecret}
+                  onChange={(e) => setGClientSecret(e.target.value)}
+                  placeholder="..."
+                  required
+                  style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+                />
+              </label>
+            </div>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                Refresh Token *{" "}
+                <span style={{ color: "var(--ink-4)" }}>(obtido via OAuth playground ou fluxo install)</span>
+              </span>
+              <input
+                type="password"
+                value={gRefreshToken}
+                onChange={(e) => setGRefreshToken(e.target.value)}
+                placeholder="1//..."
+                required
+                style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+              />
+            </label>
+
+            {saveGoogle.isError && (
+              <div style={{ color: "var(--neg)", fontSize: 12 }}>
+                {(saveGoogle.error as Error).message}
+              </div>
+            )}
+            {gJustSaved && (
+              <div style={{ color: "var(--pos)", fontSize: 12 }}>✓ Credenciais salvas (criptografadas).</div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button type="submit" className="btn" disabled={saveGoogle.isPending}>
+                {saveGoogle.isPending ? "Salvando…" : googleConn ? "Atualizar credenciais" : "Conectar Google Ads"}
+              </button>
+            </div>
+          </form>
+        </div>
+
         <p style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 12, lineHeight: 1.5 }}>
-          Google Ads, metas e taxonomia vêm nas próximas fases. O backfill popula todos os níveis
-          (account · campaign · adset · ad) pro dashboard completo.
+          Metas, taxonomia e integração Google Ads (ingestão real) chegam nas próximas iterações.
+          Meta Ads: backfill popula todos os níveis (account · campaign · adset · ad) + breakdowns.
         </p>
       </section>
     </>

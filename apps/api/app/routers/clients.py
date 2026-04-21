@@ -6,7 +6,7 @@ from app.core.db import get_db
 from app.models.client import Client
 from app.models.connection import AccountConnection, Platform
 from app.schemas.client import ClientCreate, ClientRead
-from app.schemas.connection import ConnectionRead, MetaConnectionCreate
+from app.schemas.connection import ConnectionRead, GoogleConnectionCreate, MetaConnectionCreate
 
 router = APIRouter(prefix="/api/clients", tags=["clients"])
 
@@ -86,6 +86,62 @@ def create_meta_connection(slug: str, payload: MetaConnectionCreate, db: Session
             external_account_id=payload.external_account_id,
             display_name=payload.display_name,
             tokens_enc=encrypt(payload.system_user_token),
+        )
+        db.add(conn); db.commit(); db.refresh(conn)
+
+    return ConnectionRead(
+        id=conn.id, client_id=conn.client_id,
+        platform=conn.platform.value if hasattr(conn.platform, "value") else str(conn.platform),
+        external_account_id=conn.external_account_id,
+        display_name=conn.display_name,
+        status=conn.status.value if hasattr(conn.status, "value") else str(conn.status),
+        last_sync_at=conn.last_sync_at.isoformat() if conn.last_sync_at else None,
+        last_error=conn.last_error,
+    )
+
+
+@router.post("/{slug}/connections/google", response_model=ConnectionRead, status_code=201)
+def create_google_connection(slug: str, payload: GoogleConnectionCreate, db: Session = Depends(get_db)):
+    """Armazena credenciais Google Ads criptografadas (JSON com os campos OAuth + developer token)."""
+    import json as _json
+
+    c = db.query(Client).filter(Client.slug == slug).first()
+    if not c:
+        raise HTTPException(404, "Client not found")
+
+    normalized_customer_id = payload.customer_id.replace("-", "").strip()
+
+    # Serializa o bundle de credenciais e criptografa inteiro
+    bundle = _json.dumps({
+        "developer_token": payload.developer_token,
+        "oauth_client_id": payload.oauth_client_id,
+        "oauth_client_secret": payload.oauth_client_secret,
+        "refresh_token": payload.refresh_token,
+        "login_customer_id": payload.login_customer_id,
+    })
+
+    existing = (
+        db.query(AccountConnection)
+        .filter(
+            AccountConnection.client_id == c.id,
+            AccountConnection.platform == Platform.google,
+            AccountConnection.external_account_id == normalized_customer_id,
+        )
+        .first()
+    )
+    if existing:
+        existing.tokens_enc = encrypt(bundle)
+        if payload.display_name:
+            existing.display_name = payload.display_name
+        db.add(existing); db.commit(); db.refresh(existing)
+        conn = existing
+    else:
+        conn = AccountConnection(
+            client_id=c.id,
+            platform=Platform.google,
+            external_account_id=normalized_customer_id,
+            display_name=payload.display_name or f"Google Ads {normalized_customer_id}",
+            tokens_enc=encrypt(bundle),
         )
         db.add(conn); db.commit(); db.refresh(conn)
 

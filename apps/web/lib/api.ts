@@ -132,6 +132,18 @@ export type MetaConnectionPayload = {
 export const createMetaConnection = (slug: string, body: MetaConnectionPayload) =>
   post<ConnectionRead>(`/api/clients/${slug}/connections/meta`, body);
 
+export type GoogleConnectionPayload = {
+  customer_id: string;
+  display_name?: string | null;
+  developer_token: string;
+  oauth_client_id: string;
+  oauth_client_secret: string;
+  refresh_token: string;
+  login_customer_id?: string | null;
+};
+export const createGoogleConnection = (slug: string, body: GoogleConnectionPayload) =>
+  post<ConnectionRead>(`/api/clients/${slug}/connections/google`, body);
+
 // ─── meta insights ───────────────────────────────────────────────────────
 export type RangeOpts = { days?: number; since?: string; until?: string };
 
