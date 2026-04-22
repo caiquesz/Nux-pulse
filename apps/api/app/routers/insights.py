@@ -16,6 +16,7 @@ from app.core.db import get_db
 from app.models.client import Client
 from app.models.meta import MetaAd, MetaAdset, MetaCampaign, MetaCreative, MetaInsightsDaily
 from app.models.ops import SyncJob
+from app.routers.conversions import aggregate_manuals, daily_manuals_by_date
 
 router = APIRouter(prefix="/api/clients", tags=["insights"])
 
@@ -158,7 +159,14 @@ def meta_overview(
             )
             .all()
         )
-        conv = _aggregate_conversions(conv_rows)
+        api = _aggregate_conversions(conv_rows)
+        manual = aggregate_manuals(db, c.id, start, end)
+        # Soma API (CAPI/pixel) + manual pra dashboard refletir realidade.
+        total_msgs = api["messages"] + manual["messages"]
+        total_leads = api["leads"] + manual["leads"]
+        total_purchases = api["purchases"] + manual["purchases"]
+        total_revenue = round(api["revenue"] + manual["revenue"], 2)
+
         sp = float(agg.spend or 0)
         im = int(agg.impressions or 0)
         ck = int(agg.clicks or 0)
@@ -169,14 +177,20 @@ def meta_overview(
             "reach": int(agg.reach or 0),
             "ctr": round((ck / im * 100) if im else 0, 4),
             "cpc": round((sp / ck) if ck else 0, 4),
-            "messages": conv["messages"],
-            "leads": conv["leads"],
-            "purchases": conv["purchases"],
-            "revenue": conv["revenue"],
-            "roas": round(conv["revenue"] / sp, 4) if sp > 0 else 0.0,
-            "cost_per_message": round(sp / conv["messages"], 2) if conv["messages"] else 0.0,
-            "cost_per_lead": round(sp / conv["leads"], 2) if conv["leads"] else 0.0,
-            "cost_per_purchase": round(sp / conv["purchases"], 2) if conv["purchases"] else 0.0,
+            # Valores consolidados (usados nos cards do dashboard)
+            "messages": total_msgs,
+            "leads": total_leads,
+            "purchases": total_purchases,
+            "revenue": total_revenue,
+            "roas": round(total_revenue / sp, 4) if sp > 0 else 0.0,
+            "cost_per_message": round(sp / total_msgs, 2) if total_msgs else 0.0,
+            "cost_per_lead": round(sp / total_leads, 2) if total_leads else 0.0,
+            "cost_per_purchase": round(sp / total_purchases, 2) if total_purchases else 0.0,
+            # Breakdown api vs manual (front pode mostrar badge "+N manual")
+            "manual_messages": manual["messages"],
+            "manual_leads": manual["leads"],
+            "manual_purchases": manual["purchases"],
+            "manual_revenue": manual["revenue"],
         }
 
     current = period_metrics(since_d, until_d)
@@ -1055,19 +1069,30 @@ def meta_insights_daily(
         d["clicks"] += int(r.clicks or 0)
         d["actions_rows"].append(type("X", (), {"actions": r.actions, "action_values": r.action_values}))
 
+    # Mescla conversoes manuais do periodo
+    manuals_by_date = daily_manuals_by_date(db, c.id, since_d, until_d)
+
+    # Garante que dias com manual mas sem row do Meta tambem apareçam
+    from datetime import timedelta as _td
+    cursor_d = since_d
+    while cursor_d <= until_d:
+        by_day.setdefault(cursor_d, {"spend": 0.0, "impressions": 0, "clicks": 0, "actions_rows": []})
+        cursor_d += _td(days=1)
+
     series = []
     for dt in sorted(by_day.keys()):
         b = by_day[dt]
-        conv = _aggregate_conversions(b["actions_rows"])
+        api = _aggregate_conversions(b.get("actions_rows", []))
+        manual = manuals_by_date.get(dt.isoformat(), {"messages": 0, "leads": 0, "purchases": 0, "revenue": 0.0})
         series.append({
             "date": dt.isoformat(),
             "spend": round(b["spend"], 2),
             "impressions": b["impressions"],
             "clicks": b["clicks"],
-            "messages": conv["messages"],
-            "leads": conv["leads"],
-            "purchases": conv["purchases"],
-            "revenue": conv["revenue"],
+            "messages": api["messages"] + manual["messages"],
+            "leads": api["leads"] + manual["leads"],
+            "purchases": api["purchases"] + manual["purchases"],
+            "revenue": round(api["revenue"] + manual["revenue"], 2),
         })
     return {
         "client": slug,
