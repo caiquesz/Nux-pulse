@@ -18,8 +18,14 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" data-theme="light" data-density="comfortable" className={`${inter.variable} ${mono.variable}`}>
-      <body>
+    <html
+      lang="pt-BR"
+      data-theme="dark"
+      data-density="comfortable"
+      className={`${inter.variable} ${mono.variable}`}
+      style={{ colorScheme: "dark" }}
+    >
+      <body style={{ background: "#0B0B0A" }}>
         <Providers>{children}</Providers>
       </body>
     </html>
