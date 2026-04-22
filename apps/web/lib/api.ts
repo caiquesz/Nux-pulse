@@ -18,6 +18,11 @@ type MetaOverviewMetrics = {
   ctr: number; cpc: number;
   messages: number; leads: number; purchases: number; revenue: number; roas: number;
   cost_per_message: number; cost_per_lead: number; cost_per_purchase: number;
+  // Breakdown manual (conversões registradas manualmente, já somadas nos totais acima)
+  manual_messages?: number;
+  manual_leads?: number;
+  manual_purchases?: number;
+  manual_revenue?: number;
 };
 
 export type MetaOverview = {
@@ -473,3 +478,53 @@ export const markNotificationRead = (id: number) =>
   post<{ ok: boolean }>(`/api/notifications/${id}/read`, {});
 export const markAllNotificationsRead = () =>
   post<{ updated: number }>("/api/notifications/mark-all-read", {});
+
+// ═════════════════════════════════════════════════════════════════════════
+//  CONVERSÕES MANUAIS
+// ═════════════════════════════════════════════════════════════════════════
+
+export type ConvKind = "purchase" | "lead" | "message";
+
+export type ManualConversion = {
+  id: number;
+  client_id: number;
+  date: string; // YYYY-MM-DD
+  kind: ConvKind;
+  count: number;
+  revenue: string | null;
+  campaign_id: string | null;
+  campaign_name: string | null;
+  notes: string | null;
+  created_by_id: number | null;
+  created_by_name: string | null;
+  created_at: string;
+};
+
+export type ManualConversionCreatePayload = {
+  date: string;
+  kind: ConvKind;
+  count?: number;
+  revenue?: number | null;
+  campaign_id?: string | null;
+  campaign_name?: string | null;
+  notes?: string | null;
+  created_by_id?: number | null;
+};
+
+export const listManualConversions = (slug: string, opts: { since?: string; until?: string; kind?: ConvKind } = {}) => {
+  const q = new URLSearchParams();
+  if (opts.since) q.set("since", opts.since);
+  if (opts.until) q.set("until", opts.until);
+  if (opts.kind) q.set("kind", opts.kind);
+  const qs = q.toString();
+  return get<ManualConversion[]>(`/api/clients/${slug}/manual-conversions${qs ? `?${qs}` : ""}`);
+};
+
+export const createManualConversion = (slug: string, body: ManualConversionCreatePayload) =>
+  post<ManualConversion>(`/api/clients/${slug}/manual-conversions`, body);
+
+export const updateManualConversion = (id: number, body: Partial<ManualConversionCreatePayload>) =>
+  patch<ManualConversion>(`/api/manual-conversions/${id}`, body);
+
+export const deleteManualConversion = (id: number) =>
+  del(`/api/manual-conversions/${id}`);

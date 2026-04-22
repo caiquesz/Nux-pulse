@@ -17,6 +17,7 @@ const CRUMBS: Record<string, string[]> = {
   alerts:        ["ANÁLISE", "ALERTAS"],
   forecast:      ["ANÁLISE", "FORECAST"],
   project:       ["CLIENTE", "PLANEJAMENTO"],
+  conversions:   ["CLIENTE", "CONVERSÕES"],
   reports:       ["CLIENTE", "RELATÓRIOS"],
   settings:      ["CLIENTE", "CONFIGURAÇÕES"],
   "sync-health": ["SISTEMA", "SYNC HEALTH"],
