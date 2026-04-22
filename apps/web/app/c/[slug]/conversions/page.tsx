@@ -9,11 +9,59 @@ import {
   type ConvKind, type ManualConversion, type ManualConversionCreatePayload,
 } from "@/lib/api";
 
-const KIND_CFG: Record<ConvKind, { label: string; plural: string; color: string; icon: string; tone: string }> = {
-  purchase: { label: "Venda",    plural: "Vendas",    color: "oklch(0.58 0.13 155)", icon: "🛒", tone: "pos" },
-  lead:     { label: "Lead",     plural: "Leads",     color: "oklch(0.52 0.08 235)", icon: "🎯", tone: "info" },
-  message:  { label: "Conversa", plural: "Conversas", color: "oklch(0.45 0.14 255)", icon: "💬", tone: "hero" },
+// Cores vibrantes e modernas — verde lima, cobalt electric, citrus
+// (mesma paleta accent usada em hero banners e highlights)
+const KIND_CFG: Record<ConvKind, {
+  label: string;
+  plural: string;
+  color: string;
+  Icon: (props: { size?: number }) => React.JSX.Element;
+}> = {
+  purchase: {
+    label: "Venda", plural: "Vendas",
+    color: "oklch(0.68 0.19 150)", // verde vibrante
+    Icon: ({ size = 16 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+        <line x1="3" y1="6" x2="21" y2="6" />
+        <path d="M16 10a4 4 0 0 1-8 0" />
+      </svg>
+    ),
+  },
+  lead: {
+    label: "Lead", plural: "Leads",
+    color: "oklch(0.58 0.22 255)", // cobalt electric
+    Icon: ({ size = 16 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="9" cy="8" r="4" />
+        <path d="M3 21v-1a6 6 0 0 1 6-6h0a6 6 0 0 1 6 6v1" />
+        <line x1="19" y1="8" x2="19" y2="14" />
+        <line x1="22" y1="11" x2="16" y2="11" />
+      </svg>
+    ),
+  },
+  message: {
+    label: "Conversa", plural: "Conversas",
+    color: "oklch(0.72 0.19 55)", // citrus laranja vibrante
+    Icon: ({ size = 16 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+      </svg>
+    ),
+  },
 };
+
+// Cor/ícone do card de "Receita manual" (derivado de venda mas com icone próprio)
+const REVENUE_ICON = ({ size = 16 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="1" x2="12" y2="23" />
+    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+  </svg>
+);
 
 function fmtBRL(v: number): string {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -110,17 +158,25 @@ export default function ConversionsPage() {
         gap: 10, marginTop: 18, marginBottom: 18,
       }}>
         <TotalCard
-          label="Vendas" value={totals.purchase} icon="🛒" color={KIND_CFG.purchase.color}
+          label="Vendas" value={totals.purchase}
+          icon={<KIND_CFG.purchase.Icon size={18} />}
+          color={KIND_CFG.purchase.color}
         />
         <TotalCard
-          label="Receita manual" value={totals.revenue} icon="💰"
-          color={KIND_CFG.purchase.color} isCurrency
+          label="Receita manual" value={totals.revenue}
+          icon={<REVENUE_ICON size={18} />}
+          color={KIND_CFG.purchase.color}
+          isCurrency
         />
         <TotalCard
-          label="Leads" value={totals.lead} icon="🎯" color={KIND_CFG.lead.color}
+          label="Leads" value={totals.lead}
+          icon={<KIND_CFG.lead.Icon size={18} />}
+          color={KIND_CFG.lead.color}
         />
         <TotalCard
-          label="Conversas" value={totals.message} icon="💬" color={KIND_CFG.message.color}
+          label="Conversas" value={totals.message}
+          icon={<KIND_CFG.message.Icon size={18} />}
+          color={KIND_CFG.message.color}
         />
       </div>
 
@@ -208,7 +264,11 @@ export default function ConversionsPage() {
 // ─────────────────────────────────────────────────────────────────────
 
 function TotalCard({ label, value, icon, color, isCurrency }: {
-  label: string; value: number; icon: string; color: string; isCurrency?: boolean;
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  color: string;
+  isCurrency?: boolean;
 }) {
   return (
     <div style={{
@@ -217,18 +277,26 @@ function TotalCard({ label, value, icon, color, isCurrency }: {
       border: "1px solid var(--border)",
       borderLeft: `3px solid ${color}`,
       borderRadius: 10,
+      position: "relative",
     }}>
+      {/* Icone no canto superior direito, na cor da métrica */}
+      <div style={{
+        position: "absolute", top: 12, right: 14,
+        color, opacity: 0.9,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        {icon}
+      </div>
+
       <div className="mono" style={{
         fontSize: 9, color: "var(--ink-4)", letterSpacing: 0.8,
-        textTransform: "uppercase", fontWeight: 600, marginBottom: 4,
+        textTransform: "uppercase", fontWeight: 600, marginBottom: 6,
+        paddingRight: 28,
       }}>
         {label}
       </div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-        <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
-          {isCurrency ? fmtBRL(value) : value.toLocaleString("pt-BR")}
-        </span>
-        <span style={{ fontSize: 14, opacity: 0.5 }}>{icon}</span>
+      <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+        {isCurrency ? fmtBRL(value) : value.toLocaleString("pt-BR")}
       </div>
     </div>
   );
@@ -383,9 +451,6 @@ function ConversionModal({
   const [campaignName, setCampaignName] = useState(initial?.campaign_name ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [createdById, setCreatedById] = useState<number | "">(initial?.created_by_id ?? "");
-  const firstRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { firstRef.current?.focus(); }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
     window.addEventListener("keydown", onKey);
@@ -465,7 +530,7 @@ function ConversionModal({
                       transition: "all .08s",
                     }}
                   >
-                    <span>{cfg.icon}</span>
+                    <cfg.Icon size={14} />
                     {cfg.label}
                   </button>
                 );
@@ -476,24 +541,18 @@ function ConversionModal({
           <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 10 }}>
             <div>
               <Lbl>Data *</Lbl>
-              <input
-                ref={firstRef}
-                type="date"
+              <DateField
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
+                onChange={setDate}
                 max={todayISO()}
-                style={inputStyle}
               />
             </div>
             <div>
               <Lbl>Quantidade *</Lbl>
-              <input
-                type="number" min="1" step="1"
-                value={count}
-                onChange={(e) => setCount(e.target.value)}
-                required
-                style={inputStyle}
+              <QuantityStepper
+                value={Number(count) || 1}
+                onChange={(n) => setCount(String(Math.max(1, n)))}
+                min={1}
               />
             </div>
           </div>
@@ -501,12 +560,10 @@ function ConversionModal({
           {kind === "purchase" && (
             <div>
               <Lbl>Receita total (R$) <span style={{ color: "var(--ink-4)", fontWeight: 400, letterSpacing: 0 }}>— alimenta ROAS</span></Lbl>
-              <input
-                type="number" min="0" step="0.01"
+              <CurrencyField
                 value={revenue}
-                onChange={(e) => setRevenue(e.target.value)}
-                placeholder="Ex: 350.00"
-                style={inputStyle}
+                onChange={setRevenue}
+                placeholder="350,00"
               />
             </div>
           )}
@@ -589,3 +646,340 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
   width: "100%",
 };
+
+// ═════════════════════════════════════════════════════════════════════
+//  CUSTOM FIELDS — DateField, QuantityStepper, CurrencyField
+//  Substituem os controles nativos do browser por versões alinhadas
+//  ao design system (ícones SVG, paleta dark, tipografia consistente).
+// ═════════════════════════════════════════════════════════════════════
+
+const MONTHS_FULL = [
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+];
+const WEEKDAYS_SHORT = ["S", "T", "Q", "Q", "S", "S", "D"]; // seg..dom
+
+function parseISO(s: string): Date | null {
+  if (!s) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+function toISO(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function DateField({
+  value, onChange, max, min,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  max?: string; // ISO
+  min?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [cursor, setCursor] = useState(() => {
+    const d = parseISO(value) ?? new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const wrap = useRef<HTMLDivElement>(null);
+
+  const current = parseISO(value);
+  const maxD = max ? parseISO(max) : null;
+  const minD = min ? parseISO(min) : null;
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  // Grid de 6 semanas começando na segunda
+  const cells = useMemo(() => {
+    const first = new Date(cursor);
+    const jsDay = first.getDay(); // 0=dom
+    const pre = (jsDay + 6) % 7;
+    const gridStart = new Date(first);
+    gridStart.setDate(first.getDate() - pre);
+    const out: Date[] = [];
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(gridStart);
+      d.setDate(gridStart.getDate() + i);
+      out.push(d);
+    }
+    return out;
+  }, [cursor]);
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const label = current
+    ? current.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).replace(".", "")
+    : "Selecionar data";
+
+  return (
+    <div ref={wrap} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((s) => !s)}
+        style={{
+          ...inputStyle,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          cursor: "pointer", textAlign: "left",
+          background: open ? "var(--surface)" : "var(--surface-2)",
+          borderColor: open ? "var(--border-2)" : "var(--border)",
+        }}
+      >
+        <span style={{ color: current ? "var(--ink)" : "var(--ink-4)" }}>{label}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--ink-3)" }}>
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+        </svg>
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 300,
+          width: 280,
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: 10, boxShadow: "0 16px 36px rgba(0,0,0,0.34)",
+          padding: 12,
+        }}>
+          {/* Header: ← mês ano → */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <button
+              type="button"
+              onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
+              style={navBtn}
+              aria-label="Mês anterior"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+            </button>
+            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: 0.2 }}>
+              {MONTHS_FULL[cursor.getMonth()]}{" "}
+              <span style={{ color: "var(--ink-4)", fontWeight: 400 }} className="mono">
+                {cursor.getFullYear()}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+              style={navBtn}
+              aria-label="Próximo mês"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+            </button>
+          </div>
+
+          {/* Dias da semana */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
+            {WEEKDAYS_SHORT.map((d, i) => (
+              <div key={i} className="mono" style={{
+                fontSize: 9, color: "var(--ink-4)", letterSpacing: 0.8, fontWeight: 600,
+                textAlign: "center", padding: "4px 0",
+              }}>{d}</div>
+            ))}
+          </div>
+
+          {/* Grid de dias */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+            {cells.map((d, i) => {
+              const iso = toISO(d);
+              const inMonth = d.getMonth() === cursor.getMonth();
+              const isToday = toISO(today) === iso;
+              const isSelected = value === iso;
+              const disabled = (maxD && d > maxD) || (minD && d < minD);
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  disabled={disabled || undefined}
+                  onClick={() => {
+                    if (disabled) return;
+                    onChange(iso);
+                    setOpen(false);
+                  }}
+                  style={{
+                    height: 30, padding: 0, borderRadius: 5,
+                    background: isSelected ? "var(--hero)" : "transparent",
+                    color: isSelected ? "#fff"
+                      : disabled ? "var(--ink-4)"
+                      : inMonth ? (isToday ? "var(--ink)" : "var(--ink-2)") : "var(--ink-4)",
+                    border: "none",
+                    fontSize: 11, fontWeight: isSelected ? 700 : (isToday ? 700 : 500),
+                    cursor: disabled ? "not-allowed" : "pointer",
+                    fontVariantNumeric: "tabular-nums",
+                    opacity: disabled ? 0.35 : inMonth ? 1 : 0.45,
+                    position: "relative",
+                    transition: "background .08s",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected && !disabled) e.currentTarget.style.background = "var(--surface-2)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = "transparent";
+                  }}
+                >
+                  {d.getDate()}
+                  {isToday && !isSelected && (
+                    <span style={{
+                      position: "absolute", bottom: 3, left: "50%", transform: "translateX(-50%)",
+                      width: 3, height: 3, borderRadius: "50%", background: "var(--hero)",
+                    }} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Footer: Limpar · Hoje */}
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)",
+          }}>
+            <button
+              type="button"
+              onClick={() => { onChange(""); setOpen(false); }}
+              style={{
+                background: "transparent", border: "none",
+                color: "var(--ink-3)", cursor: "pointer", fontSize: 11, padding: "2px 4px",
+              }}
+            >
+              Limpar
+            </button>
+            <button
+              type="button"
+              onClick={() => { onChange(toISO(new Date())); setOpen(false); }}
+              style={{
+                background: "transparent", border: "none",
+                color: "var(--hero)", cursor: "pointer", fontSize: 11, fontWeight: 600, padding: "2px 4px",
+              }}
+            >
+              Hoje
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const navBtn: React.CSSProperties = {
+  width: 24, height: 24, borderRadius: 5,
+  background: "transparent", border: "1px solid var(--border)",
+  color: "var(--ink-2)", cursor: "pointer",
+  display: "inline-flex", alignItems: "center", justifyContent: "center",
+};
+
+function QuantityStepper({
+  value, onChange, min = 0, max,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  min?: number;
+  max?: number;
+}) {
+  const inc = () => onChange(typeof max === "number" ? Math.min(max, value + 1) : value + 1);
+  const dec = () => onChange(Math.max(min, value - 1));
+
+  return (
+    <div style={{
+      display: "grid", gridTemplateColumns: "36px 1fr 36px",
+      border: "1px solid var(--border)", borderRadius: 6,
+      background: "var(--surface-2)", overflow: "hidden",
+    }}>
+      <button
+        type="button"
+        onClick={dec}
+        disabled={value <= min}
+        style={stepperBtn}
+        aria-label="Diminuir"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+      </button>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={value}
+        onChange={(e) => {
+          const n = Number(e.target.value.replace(/\D/g, ""));
+          if (Number.isFinite(n)) onChange(Math.max(min, typeof max === "number" ? Math.min(max, n) : n));
+        }}
+        style={{
+          textAlign: "center", padding: "9px 6px", fontSize: 13, fontWeight: 600,
+          fontVariantNumeric: "tabular-nums", color: "var(--ink)",
+          background: "transparent", border: "none", outline: "none", width: "100%",
+          fontFamily: "var(--font-sans)",
+        }}
+      />
+      <button
+        type="button"
+        onClick={inc}
+        disabled={typeof max === "number" ? value >= max : false}
+        style={stepperBtn}
+        aria-label="Aumentar"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+      </button>
+    </div>
+  );
+}
+
+const stepperBtn: React.CSSProperties = {
+  background: "transparent", border: "none",
+  color: "var(--ink-3)", cursor: "pointer",
+  display: "flex", alignItems: "center", justifyContent: "center",
+  borderRight: "1px solid var(--border)",
+};
+
+function CurrencyField({
+  value, onChange, placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div style={{
+      display: "flex", alignItems: "center",
+      border: "1px solid var(--border)", borderRadius: 6,
+      background: "var(--surface-2)", overflow: "hidden",
+    }}>
+      <span className="mono" style={{
+        padding: "9px 11px", fontSize: 12, color: "var(--ink-3)",
+        borderRight: "1px solid var(--border)",
+        background: "var(--surface)",
+        letterSpacing: 0.4, fontWeight: 600,
+      }}>
+        R$
+      </span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => {
+          // aceita "1234.56" ou "1234,56"
+          const cleaned = e.target.value.replace(/[^\d.,]/g, "").replace(",", ".");
+          onChange(cleaned);
+        }}
+        placeholder={placeholder}
+        style={{
+          flex: 1, padding: "9px 11px",
+          background: "transparent", border: "none", outline: "none",
+          color: "var(--ink)", fontSize: 13,
+          fontFamily: "var(--font-sans)",
+          fontVariantNumeric: "tabular-nums",
+          width: "100%",
+        }}
+      />
+    </div>
+  );
+}
