@@ -24,12 +24,10 @@ const CRUMBS: Record<string, string[]> = {
 
 type Props = {
   slug: string;
-  theme: "light" | "dark";
-  onToggleTheme: () => void;
   onOpenTweaks: () => void;
 };
 
-export function Topbar({ slug, theme, onToggleTheme, onOpenTweaks }: Props) {
+export function Topbar({ slug, onOpenTweaks }: Props) {
   const pathname = usePathname();
   const page = pathname.split("/").pop() ?? "overview";
   const crumbs = CRUMBS[page] ?? ["DASHBOARDS", page.toUpperCase()];
@@ -53,10 +51,6 @@ export function Topbar({ slug, theme, onToggleTheme, onOpenTweaks }: Props) {
         <Icon name="search" size={11} />
         <span style={{ color: "var(--ink-4)" }}>Buscar…</span>
         <span className="mono" style={{ background: "var(--surface-2)", padding: "1px 5px", borderRadius: 3, marginLeft: 4 }}>⌘K</span>
-      </button>
-
-      <button className="icon-btn" onClick={onToggleTheme} title="Alternar tema">
-        <Icon name={theme === "light" ? "moon" : "sun"} size={14} />
       </button>
 
       <NotificationsBell />

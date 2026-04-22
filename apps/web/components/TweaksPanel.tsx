@@ -10,7 +10,6 @@ export type Period = "7d" | "30d" | "90d";
 type Props = {
   open: boolean;
   onClose: () => void;
-  theme: Theme;       onTheme: (v: Theme) => void;
   density: Density;   onDensity: (v: Density) => void;
   chartStyle: ChartStyle; onChart: (v: ChartStyle) => void;
   sidebar: Sidebar;   onSidebar: (v: Sidebar) => void;
@@ -27,13 +26,6 @@ export function TweaksPanel(p: Props) {
         </button>
       </div>
       <div className="tweaks-body">
-        <Row label="Tema">
-          {(["light", "dark"] as const).map((v) => (
-            <button key={v} className={p.theme === v ? "on" : ""} onClick={() => p.onTheme(v)}>
-              {v === "light" ? "CLARO" : "ESCURO"}
-            </button>
-          ))}
-        </Row>
         <Row label="Densidade">
           {(["comfortable", "compact"] as const).map((v) => (
             <button key={v} className={p.density === v ? "on" : ""} onClick={() => p.onDensity(v)}>
