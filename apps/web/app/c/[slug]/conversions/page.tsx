@@ -183,7 +183,7 @@ export default function ConversionsPage() {
       {creating && (
         <ConversionModal
           team={teamQ.data ?? []}
-          onSubmit={(body) => createMut.mutate(body)}
+          onSubmit={(body) => createMut.mutate(body as ManualConversionCreatePayload)}
           onCancel={() => setCreating(false)}
           submitting={createMut.isPending}
           error={createMut.error ? (createMut.error as Error).message : null}
