@@ -190,16 +190,57 @@ button {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: hidden;           /* side-to-side fica sem overflow */
+  min-height: 0;              /* permite que .sb-scroll dentro shrinke e acione overflow-y */
 }
+/* Área central scrollável: brand fica pinned no topo, .sb-foot no fundo (margin-top:auto).
+   Em viewports curtos (notebook 13"/768-900px altura), sem isso os últimos grupos somem. */
+.sb-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+.sb-scroll::-webkit-scrollbar { width: 6px; }
+.sb-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+.sb-scroll::-webkit-scrollbar-thumb:hover { background: var(--ink-4); }
 .sb-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 18px 20px;
   border-bottom: 1px solid var(--border);
   min-height: 56px;
 }
+/* Logo NUX: o PNG é preto puro sobre transparência. No dark theme invertemos
+   pra virar branco; no light fica preto natural. Sem filter/shadow. */
+/* Logo NUX (PNG preto sobre alpha). Dark theme: invert pra branco. */
+.sb-logo-wordmark,
+.sb-logo-mark {
+  display: block;
+  object-fit: contain;
+  width: auto;
+  height: auto;
+  max-height: 22px;
+}
+.sb-logo-mark { max-height: 26px; max-width: 26px; }
+[data-theme="dark"] .sb-logo-wordmark,
+[data-theme="dark"] .sb-logo-mark { filter: invert(1); }
+
+.sb-pulse-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .sb-bars {
   display: flex;
   flex-direction: column;
@@ -514,6 +555,22 @@ button {
 
 /* ─── GRID / CARDS ─── */
 .grid { display: grid; gap: var(--gap); }
+/* Grid responsivo padrão para KPIs. Escala de 2 a N colunas conforme largura
+   disponível — evita cards comprimidos em notebooks (1366×768) sem sacrificar
+   densidade em monitores largos. minmax(0,...) previne overflow por conteúdo. */
+.grid-kpi {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+}
+/* Em viewports médios (13"/14" notebook ~1300-1500px com sidebar 240), restringe
+   a densidade máxima pra 4 colunas — senão o auto-fit tenta caber 6 e estreita demais. */
+@media (max-width: 1500px) {
+  .grid-kpi { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+}
+@media (max-width: 1100px) {
+  .grid-kpi { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+}
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -573,12 +630,17 @@ button {
   letter-spacing: 0; text-transform: none; cursor: help;
 }
 .stat-value {
-  font-size: 28px;
+  /* clamp shrinka a fonte quando o card fica estreito (notebook 1366px →
+     6 colunas = ~150px/card). Min 18px legível, preferido ~2vw, max 28px. */
+  font-size: clamp(18px, 1.8vw, 28px);
   font-weight: 700;
   letter-spacing: -1px;
   color: var(--ink);
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  /* Valores BRL longos (ex. "R$ 1.234.567") quebram em 2 linhas no lugar de overflow. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .stat-value .cur {
   font-size: 0.55em;

@@ -199,7 +199,7 @@ export default function ReportsPage() {
           {ov && (
             <section>
               <SectionHeader num="02" title="Números que importam" subtitle="As 4 métricas principais" />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
                 <BigKpi label="Investimento" value={fmtBRL(ov.spend)} delta={deltaSpend ?? null} inverse />
                 <BigKpi
                   label={primaryConversion?.plural ?? "Conversões"}
@@ -287,7 +287,9 @@ export default function ReportsPage() {
                   return (
                     <div style={{
                       marginTop: 18, paddingTop: 16, borderTop: "1px solid var(--border)",
-                      display: "grid", gridTemplateColumns: primaryConversion ? "repeat(4, 1fr)" : "repeat(2, 1fr)",
+                      display: "grid", gridTemplateColumns: primaryConversion
+                        ? "repeat(auto-fit, minmax(180px, 1fr))"
+                        : "repeat(auto-fit, minmax(220px, 1fr))",
                       gap: 20,
                     }}>
                       <MiniStat label="Investimento médio/dia" value={fmtBRL(avgSpend)} />

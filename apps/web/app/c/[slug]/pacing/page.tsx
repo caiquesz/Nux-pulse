@@ -47,7 +47,7 @@ export default function PacingPage() {
       </div>
 
       {totals && totals.expected_spend > 0 && (
-        <div className="card" style={{ padding: 24, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+        <div className="card" style={{ padding: 24, marginBottom: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16 }}>
           <div>
             <div style={{ fontSize: 11, color: "var(--ink-4)", textTransform: "uppercase" }}>Esperado ({days}d)</div>
             <div style={{ fontSize: 22, fontWeight: 700 }}>{fmtBRL(totals.expected_spend)}</div>

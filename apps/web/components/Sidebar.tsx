@@ -1,10 +1,11 @@
 "use client";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { metaAlerts } from "@/lib/api";
-import { Icon, NuxBars, type IconName } from "./icons/Icon";
+import { Icon, type IconName } from "./icons/Icon";
 
 type NavItem = { id: string; label: string; icon: IconName };
 type NavGroup = { group: string; items: NavItem[] };
@@ -76,7 +77,15 @@ export function Sidebar({ slug, collapsed, onToggle }: Props) {
       >
         {collapsed ? (
           <>
-            <NuxBars size="sm" />
+            {/* Colapsado: só o símbolo ▽ (PNG dedicado, quadrado). */}
+            <Image
+              src="/nux-mark.png"
+              alt="NUX"
+              width={28}
+              height={28}
+              priority
+              className="sb-logo-mark"
+            />
             <button
               className="icon-btn"
               onClick={onToggle}
@@ -88,11 +97,15 @@ export function Sidebar({ slug, collapsed, onToggle }: Props) {
           </>
         ) : (
           <>
-            <NuxBars size="sm" />
-            <div className="sb-word">
-              <span className="wm">NUX</span>
-              <span className="sub">Pulse</span>
-            </div>
+            <Image
+              src="/nux-wordmark.png"
+              alt="NUX"
+              width={90}
+              height={24}
+              priority
+              className="sb-logo-wordmark"
+            />
+            <span className="sb-pulse-tag">Pulse</span>
             <button
               className="icon-btn"
               style={{ marginLeft: "auto" }}
@@ -106,27 +119,31 @@ export function Sidebar({ slug, collapsed, onToggle }: Props) {
         )}
       </div>
 
-      {NAV.map((g) => (
-        <div key={g.group} className="sb-group">
-          {!collapsed && <div className="sb-group-label">{g.group}</div>}
-          {g.items.map((it) => {
-            const active = current === it.id;
-            const badge = badgeFor(it.id);
-            return (
-              <Link
-                key={it.id}
-                href={`/c/${slug}/${it.id}`}
-                className={`sb-item ${active ? "active" : ""}`}
-                title={collapsed ? it.label : undefined}
-              >
-                <span className="sb-ic"><Icon name={it.icon} size={16} /></span>
-                {!collapsed && <span className="sb-label">{it.label}</span>}
-                {!collapsed && badge && <span className="sb-badge dot-warn">{badge}</span>}
-              </Link>
-            );
-          })}
-        </div>
-      ))}
+      {/* Área de navegação rola quando o viewport é curto (notebook em 768-900px de
+          altura). Brand/foot ficam fixos, só os grupos scrollam. */}
+      <div className="sb-scroll">
+        {NAV.map((g) => (
+          <div key={g.group} className="sb-group">
+            {!collapsed && <div className="sb-group-label">{g.group}</div>}
+            {g.items.map((it) => {
+              const active = current === it.id;
+              const badge = badgeFor(it.id);
+              return (
+                <Link
+                  key={it.id}
+                  href={`/c/${slug}/${it.id}`}
+                  className={`sb-item ${active ? "active" : ""}`}
+                  title={collapsed ? it.label : undefined}
+                >
+                  <span className="sb-ic"><Icon name={it.icon} size={16} /></span>
+                  {!collapsed && <span className="sb-label">{it.label}</span>}
+                  {!collapsed && badge && <span className="sb-badge dot-warn">{badge}</span>}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
+      </div>
 
       <div className="sb-foot">
         <div className="sb-avatar">CD</div>

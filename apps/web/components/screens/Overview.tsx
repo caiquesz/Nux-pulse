@@ -175,7 +175,7 @@ export function Overview() {
         <div className="rule" />
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: "repeat(6, minmax(0, 1fr))", marginBottom: 28 }}>
+      <div className="grid-kpi" style={{ marginBottom: 28 }}>
         {kpis.map((k) => (
           <div key={k.label} className="card">
             <div className="stat">

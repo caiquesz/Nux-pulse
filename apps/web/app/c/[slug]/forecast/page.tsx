@@ -90,7 +90,7 @@ export default function ForecastPage() {
 
       {stats && (
         <>
-          <div className="card" style={{ padding: 24, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 16 }}>
+          <div className="card" style={{ padding: 24, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 20, marginBottom: 16 }}>
             <Stat label="Gasto médio / dia" value={fmtBRL(stats.avgDaily)} />
             <Stat label="Cliques médios / dia" value={fmtInt(Math.round(stats.avgClicks))} />
             <Stat

@@ -154,7 +154,7 @@ export default function ConversionsPage() {
 
       {/* Totais */}
       <div style={{
-        display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+        display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
         gap: 10, marginTop: 18, marginBottom: 18,
       }}>
         <TotalCard
