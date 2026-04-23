@@ -14,6 +14,10 @@ _SUPABASE_HINT_PARAMS = {"pgbouncer", "schema", "connection_limit", "pool_timeou
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # "development" (default, relaxa guards) | "production" (exige todas as envs de segurança).
+    # Railway/Vercel devem setar ENV=production no deploy.
+    ENV: str = "development"
+
     DATABASE_URL: str = "postgresql+psycopg://nux:nux_dev@localhost:5432/nux_pulse"
     # Supabase fornece duas URLs: `DATABASE_URL` (pooler) p/ runtime
     # e `DIRECT_URL` (direct) p/ migrations. Se não vier, usa a mesma.
@@ -24,6 +28,13 @@ class Settings(BaseSettings):
     API_PORT: int = 8000
     API_SECRET_KEY: str = "dev-secret-change-me"
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3010"
+
+    # Secret compartilhado com o cron proxy (Vercel). Obrigatório em produção.
+    CRON_SECRET: str | None = None
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENV.lower() == "production"
 
     META_APP_ID: str | None = None
     META_APP_SECRET: str | None = None

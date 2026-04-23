@@ -1,6 +1,9 @@
 // Cliente HTTP para a API NUX Pulse — todas as chamadas tipadas.
-
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+//
+// Todas as requests passam pelo proxy same-origin (app/api/[...path]/route.ts)
+// que injeta X-API-Key server-side. Por isso BASE é "" (caminho relativo):
+// o browser fala com o próprio domínio Next, que proxia pra Railway.
+const BASE = "";
 
 export type ClientRead = {
   id: number;

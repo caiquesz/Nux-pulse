@@ -1,14 +1,18 @@
 """Endpoints de sincronização — disparar backfills e inspecionar jobs."""
+import logging
 import os
 import time
 import traceback
 from datetime import datetime, timedelta, timezone
+
+_log = logging.getLogger("nux.sync")
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.crypto import decrypt
 from app.core.db import SessionLocal, get_db
 from app.models.client import Client
@@ -53,15 +57,52 @@ class JobRead(BaseModel):
 
 
 def _run_bg(client_id: int, connection_id: int, days: int, level: str) -> None:
+    """Executa backfill em background. Qualquer erro precoce (decrypt, conexão
+    faltando, etc.) é gravado num SyncJob com status=error — senão a UI fica
+    eternamente esperando sem saber que falhou.
+    """
     db = SessionLocal()
+    # Sentinela pra casos em que a falha acontece ANTES de run_backfill criar
+    # seu próprio SyncJob. Garante que a UI sempre tenha algo pra mostrar.
+    fallback_job: SyncJob | None = None
     try:
         conn = db.query(AccountConnection).filter(AccountConnection.id == connection_id).first()
         if not conn or not conn.tokens_enc:
+            fallback_job = SyncJob(
+                client_id=client_id, platform="meta", kind="backfill",
+                status="error",
+                started_at=datetime.now(timezone.utc),
+                finished_at=datetime.now(timezone.utc),
+                error_message="connection missing or without tokens_enc (re-connect in Settings)",
+            )
+            db.add(fallback_job); db.commit()
+            _log.warning(f"[bg sync] connection {connection_id} missing/no tokens — job {fallback_job.id} marked error")
             return
-        token = decrypt(conn.tokens_enc)
+
+        try:
+            token = decrypt(conn.tokens_enc)
+        except Exception as e:
+            # Causa típica: API_SECRET_KEY foi rotacionado e invalidou tokens salvos.
+            # Grava no próprio connection.last_error + cria SyncJob visível.
+            msg = f"failed to decrypt stored token ({type(e).__name__}) — re-connect in Settings. {e!s}"[:400]
+            conn.last_error = msg
+            db.add(conn)
+            fallback_job = SyncJob(
+                client_id=client_id, platform="meta", kind="backfill",
+                status="error",
+                started_at=datetime.now(timezone.utc),
+                finished_at=datetime.now(timezone.utc),
+                error_message=msg,
+            )
+            db.add(fallback_job); db.commit()
+            _log.error(f"[bg sync] decrypt failed for connection {connection_id}: {msg}")
+            return
+
         run_backfill(db, connection=conn, token=token, days=days, level=level)
-    except Exception:
-        pass  # erro já foi gravado em sync_jobs / account_connections
+    except Exception as e:
+        # Caso run_backfill propague, ele já gravou status=error no próprio job.
+        # Aqui só garantimos que o log não fica invisível (antes era `pass` puro).
+        _log.exception(f"[bg sync] unexpected error for connection {connection_id}: {e!s}")
     finally:
         db.close()
 
@@ -175,12 +216,13 @@ def run_scheduled_sync(
     Dispara backfill pra TODAS as conexões ativas. Protegido pela env `CRON_SECRET`.
 
     Uso típico: 1×/dia 02:00 BRT, days=3 (cobre re-delivery/late events da Meta)."""
-    expected = os.environ.get("CRON_SECRET")
+    expected = settings.CRON_SECRET or os.environ.get("CRON_SECRET")
+    if settings.is_production and not expected:
+        # Em produção, ausência de CRON_SECRET é erro de config — não silenciar.
+        raise HTTPException(500, "CRON_SECRET not configured (production requires it)")
     if expected and x_cron_secret != expected:
         raise HTTPException(401, "invalid cron secret")
-    # também tolera SEM secret configurado (dev/staging) pra não quebrar
-    if not expected:
-        pass
+    # dev/staging sem secret: libera (facilita testes locais)
 
     conns = (
         db.query(AccountConnection)

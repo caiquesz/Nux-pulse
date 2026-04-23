@@ -10,6 +10,10 @@ export const revalidate = 0;
 
 export async function GET(req: Request): Promise<Response> {
   const cronSecret = process.env.CRON_SECRET;
+  // API_SECRET_KEY é lido server-side (sem NEXT_PUBLIC_) — fica só no edge,
+  // nunca no bundle do browser. Necessário porque o router sync agora exige
+  // X-API-Key em todos endpoints (defense-in-depth: cron também passa por auth).
+  const apiKey = process.env.API_SECRET_KEY;
 
   // Vercel Cron envia "Authorization: Bearer <CRON_SECRET>". Rejeita se não bater.
   if (cronSecret) {
@@ -24,13 +28,15 @@ export async function GET(req: Request): Promise<Response> {
     return Response.json({ error: "NEXT_PUBLIC_API_URL not set" }, { status: 500 });
   }
 
-  // Chama a API com o mesmo CRON_SECRET (X-Cron-Secret) — a API também valida.
+  // Chama a API com CRON_SECRET (X-Cron-Secret) + API_SECRET_KEY (X-API-Key).
+  // A API valida os dois — cron deve ter ambas as credenciais.
   try {
     const r = await fetch(`${apiBase}/api/sync/all?days=3&level=ad`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         ...(cronSecret ? { "X-Cron-Secret": cronSecret } : {}),
+        ...(apiKey ? { "X-API-Key": apiKey } : {}),
       },
     });
     const body = await r.json().catch(() => ({ parse_error: true }));

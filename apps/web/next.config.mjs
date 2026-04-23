@@ -1,11 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  async rewrites() {
-    return [
-      { source: "/api/:path*", destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/:path*` },
-    ];
-  },
+  // O proxy para /api/* agora é feito pelo route handler em
+  // app/api/[...path]/route.ts, que injeta X-API-Key server-side.
+  // Rewrites não suportam injeção de headers, por isso migramos pro handler.
 };
 
 export default nextConfig;
