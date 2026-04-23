@@ -15,21 +15,21 @@ export const metadata = {
   title: "NUX Pulse",
   description: "Analytics for Paid Media",
   icons: {
-    // Par light+dark: browser escolhe via prefers-color-scheme.
-    //  - light (sem media): ícone PRETO (default) → legível em tabs claras
-    //  - dark (media query): ícone BRANCO → legível em tabs escuras
-    // Chrome/Safari/Firefox respeitam este pattern; quem não respeitar cai no default (light).
+    // Default = BRANCO (fica visível em tabs dark, que é o caso comum no Chrome atual).
+    // Arquivos *-dark.* ficam com versão PRETA — usados por browsers que honram
+    // `media: (prefers-color-scheme: light)` no <link rel=icon>. Chrome ignora essa
+    // media query hoje, então a maioria dos usuários verá o branco sempre.
     icon: [
       { url: "/favicon.ico", sizes: "any" },
       { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
       { url: "/icon-512.png", type: "image/png", sizes: "512x512" },
-      { url: "/favicon-dark.ico", sizes: "any", media: "(prefers-color-scheme: dark)" },
-      { url: "/favicon-32-dark.png", type: "image/png", sizes: "32x32", media: "(prefers-color-scheme: dark)" },
-      { url: "/icon-512-dark.png", type: "image/png", sizes: "512x512", media: "(prefers-color-scheme: dark)" },
+      { url: "/favicon-dark.ico", sizes: "any", media: "(prefers-color-scheme: light)" },
+      { url: "/favicon-32-dark.png", type: "image/png", sizes: "32x32", media: "(prefers-color-scheme: light)" },
+      { url: "/icon-512-dark.png", type: "image/png", sizes: "512x512", media: "(prefers-color-scheme: light)" },
     ],
     apple: [
       { url: "/apple-touch-icon.png", sizes: "180x180" },
-      { url: "/apple-touch-icon-dark.png", sizes: "180x180", media: "(prefers-color-scheme: dark)" },
+      { url: "/apple-touch-icon-dark.png", sizes: "180x180", media: "(prefers-color-scheme: light)" },
     ],
     shortcut: ["/favicon.ico"],
   },
