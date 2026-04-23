@@ -9,10 +9,16 @@ from app.core.config import settings
 from app.mcp_server import mcp
 from app.routers import clients, conversions, health, insights, project, sync
 
+# ─── MCP sub-app (precisa ser criado antes do FastAPI principal pra
+# propagar o `lifespan` — fastmcp usa task groups que só inicializam
+# se o lifespan do sub-app for herdado pelo app pai). ─────────────────
+_mcp_http_app = mcp.http_app(path="/")
+
 app = FastAPI(
     title="NUX Pulse API",
     version="0.1.0",
     description="Marketing analytics backend — Meta Ads + Google Ads",
+    lifespan=_mcp_http_app.lifespan,
 )
 
 app.add_middleware(
@@ -65,9 +71,9 @@ app.include_router(conversions.router, dependencies=_protected)
 
 # Monta o MCP server em /mcp (streamable-http transport). Cliente Claude Desktop
 # conecta via https://nux-pulse-production.up.railway.app/mcp com X-API-Key.
-_mcp_app = mcp.http_app(path="/")
-_mcp_app.add_middleware(_MCPKeyAuthMiddleware)
-app.mount("/mcp", _mcp_app)
+# O sub-app foi criado acima (antes do FastAPI) pra que o lifespan seja herdado.
+_mcp_http_app.add_middleware(_MCPKeyAuthMiddleware)
+app.mount("/mcp", _mcp_http_app)
 
 
 @app.get("/")
