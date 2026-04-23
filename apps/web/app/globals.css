@@ -215,7 +215,7 @@ button {
 }
 /* Logo NUX: o PNG é preto puro sobre transparência. No dark theme invertemos
    pra virar branco; no light fica preto natural. Sem filter/shadow. */
-/* Logo NUX (PNG preto sobre alpha). Dark theme: invert pra branco. */
+/* Logo NUX oficial — assets brancos sobre alpha (já otimizados pra dark theme). */
 .sb-logo-wordmark,
 .sb-logo-mark {
   display: block;
@@ -225,8 +225,6 @@ button {
   max-height: 22px;
 }
 .sb-logo-mark { max-height: 26px; max-width: 26px; }
-[data-theme="dark"] .sb-logo-wordmark,
-[data-theme="dark"] .sb-logo-mark { filter: invert(1); }
 
 .sb-pulse-tag {
   font-family: var(--font-mono);
