@@ -431,7 +431,11 @@ def run_backfill(
                 total_insights += n
                 _log.info(f"[job {job.id}] breakdown={bk} ingested {n} rows")
             except Exception as e:
-                # breakdowns são best-effort: se a API rejeitar um, continua os outros
+                # breakdowns são best-effort: se a API rejeitar um, continua os outros.
+                # PRECISA rollback — senão Postgres marca a transaction como aborted
+                # e qualquer commit subsequente (incl. o update final do SyncJob)
+                # levanta "InFailedSqlTransaction".
+                db.rollback()
                 _log.info(f"[job {job.id}] breakdown={bk} falhou (não crítico): {e!s}"[:200])
 
         rows = total_insights

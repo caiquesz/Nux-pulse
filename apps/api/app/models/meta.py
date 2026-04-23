@@ -77,8 +77,10 @@ class MetaInsightsDaily(Base):
     date: Mapped[date] = mapped_column(Date)
     level: Mapped[str] = mapped_column(String(16))  # account|campaign|adset|ad
     object_id: Mapped[str] = mapped_column(String(32))
-    breakdown_key: Mapped[str] = mapped_column(String(32), default="none")
-    breakdown_value: Mapped[str | None] = mapped_column(String(64))
+    # Nomes de breakdowns da Meta podem passar de 32 chars
+    # (ex.: "hourly_stats_aggregated_by_advertiser_time_zone" = 46). 64 é folgado.
+    breakdown_key: Mapped[str] = mapped_column(String(64), default="none")
+    breakdown_value: Mapped[str | None] = mapped_column(String(128))
 
     spend: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
     impressions: Mapped[int] = mapped_column(BigInteger, default=0)
