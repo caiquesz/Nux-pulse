@@ -175,11 +175,22 @@ def sync_structure(db: Session, *, client_id: int, account_id: str, token: str) 
 
         # adsets
         _log.info("fetch+upsert adsets…")
+        # Mesma proteção que usamos em ads (linha ~215): carrega campanhas válidas
+        # e pula adsets órfãos. Meta às vezes devolve adsets sem `campaign_id`
+        # (arquivados, ou cuja campanha foi deletada) — `a["campaign_id"]` quebrava
+        # tudo com KeyError, e o FK constraint quebraria igual se a campanha não
+        # existir localmente.
+        valid_campaigns = {r[0] for r in db.query(MetaCampaign.id).filter(MetaCampaign.client_id == client_id).all()}
+        skipped_orphan_adset_campaign = 0
         for a in client.fetch_adsets(account_id):
+            campaign_id = a.get("campaign_id")
+            if not campaign_id or campaign_id not in valid_campaigns:
+                skipped_orphan_adset_campaign += 1
+                continue
             stmt = pg_insert(MetaAdset).values(
                 id=a["id"],
                 client_id=client_id,
-                campaign_id=a["campaign_id"],
+                campaign_id=campaign_id,
                 name=a.get("name") or "",
                 status=a.get("status"),
                 optimization_goal=a.get("optimization_goal"),
@@ -203,7 +214,11 @@ def sync_structure(db: Session, *, client_id: int, account_id: str, token: str) 
             counts["adsets"] += 1
         t_as = time.time()
         db.commit()
-        _log.info(f"adsets committed: {counts['adsets']} rows ({round(time.time()-t_as,2)}s commit)")
+        _log.info(
+            f"adsets committed: {counts['adsets']} rows, "
+            f"{skipped_orphan_adset_campaign} orphan (missing campaign) skipped "
+            f"({round(time.time()-t_as,2)}s commit)"
+        )
 
         # ads
         _log.info("fetch+upsert ads…")
