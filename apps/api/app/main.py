@@ -24,9 +24,14 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
+    # Origens adicionais liberadas via regex. Cobre Claude Desktop (origin "null"
+    # em alguns builds), claude.ai, subdomínios *.anthropic.com. Essencial pro
+    # /mcp funcionar — CORS preflight do main app intercepta antes do sub-app.
+    allow_origin_regex=r"^(https://(.*\.)?(claude\.ai|anthropic\.com)|null)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Mcp-Session-Id"],
 )
 
 
