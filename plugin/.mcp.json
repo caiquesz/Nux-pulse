@@ -1,0 +1,9 @@
+{
+  "nux-pulse": {
+    "type": "http",
+    "url": "https://nux-pulse-production.up.railway.app/mcp/",
+    "headers": {
+      "X-API-Key": "${CLAUDE_PULSE_API_KEY}"
+    }
+  }
+}

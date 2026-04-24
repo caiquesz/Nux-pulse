@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "nux-pulse",
+  "description": "Marketplace interno NUX com plugin de integração Pulse (MCP + registro automático de ações de ads).",
+  "owner": {
+    "name": "Caique Divino (NUX)",
+    "email": "caiquedivinosilva29@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "nux-pulse-integration",
+      "description": "Conecta Claude ao backend NUX Pulse via MCP e instrui a registrar automaticamente toda ação feita em Meta Ads / Google Ads (via skills ratos) como task no Planejamento do cliente.",
+      "category": "productivity",
+      "source": "./plugin",
+      "homepage": "https://github.com/caiquesz/Nux-pulse"
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "name": "nux-pulse-integration",
+  "description": "Integração automática: Claude + NUX Pulse (task tracking de ações em Meta Ads e Google Ads).",
+  "author": {
+    "name": "Caique Divino (NUX)",
+    "email": "caiquedivinosilva29@gmail.com"
+  },
+  "version": "0.1.0"
+}
