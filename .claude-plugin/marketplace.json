@@ -1,7 +1,5 @@
 {
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "nux-pulse",
-  "description": "Marketplace interno NUX com plugin de integração Pulse (MCP + registro automático de ações de ads).",
   "owner": {
     "name": "Caique Divino (NUX)",
     "email": "caiquedivinosilva29@gmail.com"
