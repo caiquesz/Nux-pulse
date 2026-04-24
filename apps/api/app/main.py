@@ -72,6 +72,19 @@ app.include_router(conversions.router, dependencies=_protected)
 # Monta o MCP server em /mcp (streamable-http transport). Cliente Claude Desktop
 # conecta via https://nux-pulse-production.up.railway.app/mcp com X-API-Key.
 # O sub-app foi criado acima (antes do FastAPI) pra que o lifespan seja herdado.
+#
+# CORS wide-open só aqui dentro de /mcp: Claude Desktop / claude.ai fazem
+# request de vários domínios (claude.ai, desktop.anthropic.com, null em apps),
+# e auth por header (X-API-Key) não é vulnerável a CSRF — cookie não existe.
+# allow_credentials=False é mandatório pra usar allow_origins=["*"].
+_mcp_http_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["Mcp-Session-Id"],  # cliente MCP precisa ler isso
+)
 _mcp_http_app.add_middleware(_MCPKeyAuthMiddleware)
 app.mount("/mcp", _mcp_http_app)
 
