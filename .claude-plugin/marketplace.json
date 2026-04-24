@@ -1,5 +1,8 @@
 {
   "name": "nux-pulse",
+  "metadata": {
+    "description": "Marketplace interno NUX — plugin de integração Pulse (MCP + registro automático de ações de ads)."
+  },
   "owner": {
     "name": "Caique Divino (NUX)",
     "email": "caiquedivinosilva29@gmail.com"
