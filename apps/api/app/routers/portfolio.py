@@ -186,14 +186,18 @@ def run_scoring_cron(
     if expected and x_cron_secret != expected:
         raise HTTPException(401, "invalid cron secret")
 
-    ps = date.fromisoformat(period_start) if period_start else iso_week_start(date.today())
-    if ps.weekday() != 0:
-        # forca ser segunda-feira pra manter idempotencia da unique constraint
-        ps = ps - timedelta(days=ps.weekday())
+    if period_start:
+        ps = date.fromisoformat(period_start)
+        if ps.weekday() != 0:
+            # forca ser segunda-feira pra manter idempotencia da unique constraint
+            ps = ps - timedelta(days=ps.weekday())
+    else:
+        ps = None  # delega o default pro engine (semana ISO anterior)
 
     results = run_for_all(db, period_start=ps)
+    effective_ps = ps if ps else (iso_week_start(date.today()) - timedelta(days=7))
     return {
-        "period_start": ps.isoformat(),
+        "period_start": effective_ps.isoformat(),
         "scored": len(results),
         "summary": [
             {
