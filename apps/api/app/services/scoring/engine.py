@@ -148,11 +148,18 @@ def persist(db: Session, result: ClientResult, period_start: date) -> None:
 def run_for_all(db: Session, period_start: date | None = None) -> list[ClientResult]:
     """Calcula e persiste score pra todos os clientes ativos.
 
-    `period_start` default = segunda da semana ISO de hoje. period_end =
-    domingo (period_start + 6).
+    `period_start` default = segunda da semana ISO **anterior** (semana
+    fechada). period_end = domingo da mesma semana (period_start + 6).
+
+    Razao: o cron roda segunda 06h BRT — usar a semana atual significa
+    1 dia de dado (zero ate as 06h). A semana anterior e a janela natural
+    'fechada' pra reportar.
+
+    Pra recalcular periodo passado, passa `period_start` explicitamente
+    (ex: '2026-04-13' calcula a semana de 13-19 abril).
     """
     if period_start is None:
-        period_start = iso_week_start(date.today())
+        period_start = iso_week_start(date.today()) - timedelta(days=7)
     period_end = period_start + timedelta(days=6)
 
     clients = db.query(Client).filter(Client.is_active.is_(True)).all()
