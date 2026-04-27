@@ -1,7 +1,7 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 
 import { ClientRow } from "@/components/ClientRow";
 import { Sparkline } from "@/components/primitives/Sparkline";
@@ -39,7 +39,15 @@ const PERIOD_LABEL: Record<PeriodKey, string> = {
   "custom": "intervalo customizado",
 };
 
-export default function CommandCenter() {
+export default function CommandCenterPage() {
+  return (
+    <Suspense fallback={<main style={{ minHeight: "100vh", background: "var(--bg)" }} />}>
+      <CommandCenter />
+    </Suspense>
+  );
+}
+
+function CommandCenter() {
   const qc = useQueryClient();
   const router = useRouter();
   const params = useSearchParams();
