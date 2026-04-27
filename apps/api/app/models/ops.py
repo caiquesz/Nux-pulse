@@ -26,7 +26,7 @@ class Alert(Base, TimestampMixin):
     __tablename__ = "alerts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    client_id: Mapped[int] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
+    client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id", ondelete="CASCADE"), index=True)
     severity: Mapped[str] = mapped_column(String(16))  # info|warn|neg|pos
     title: Mapped[str] = mapped_column(String(255))
     body: Mapped[str | None] = mapped_column(Text)
@@ -34,3 +34,10 @@ class Alert(Base, TimestampMixin):
     object_id: Mapped[str | None] = mapped_column(String(48))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     dismissed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Portfolio-wide extensions (Fase 1 do Command Center)
+    rule_code: Mapped[str | None] = mapped_column(String(40), index=True)
+    category_code: Mapped[str | None] = mapped_column(String(40))
+    scope: Mapped[str] = mapped_column(String(20), default="client", server_default="client")
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    task_id: Mapped[int | None] = mapped_column(ForeignKey("tasks.id", ondelete="SET NULL"))
