@@ -37,6 +37,12 @@ def _to_read(db: Session, m: ManualConversion) -> ManualConversionRead:
         campaign_id=m.campaign_id, campaign_name=m.campaign_name,
         notes=m.notes, created_by_id=m.created_by_id,
         created_by_name=name, created_at=m.created_at,
+        attribution_source=m.attribution_source,
+        external_event_id=m.external_event_id,
+        utm_source=m.utm_source, utm_medium=m.utm_medium,
+        utm_campaign=m.utm_campaign, utm_content=m.utm_content,
+        utm_term=m.utm_term,
+        meta_ad_id=m.meta_ad_id, meta_ad_name=m.meta_ad_name,
     )
 
 

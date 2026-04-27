@@ -490,6 +490,8 @@ export const markAllNotificationsRead = () =>
 
 export type ConvKind = "purchase" | "lead" | "message";
 
+export type AttributionSource = "manual" | "trackcore" | string;
+
 export type ManualConversion = {
   id: number;
   client_id: number;
@@ -503,6 +505,16 @@ export type ManualConversion = {
   created_by_id: number | null;
   created_by_name: string | null;
   created_at: string;
+  // Atribuicao (preenchida quando vem do Trackcore via webhook)
+  attribution_source: AttributionSource;
+  external_event_id: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  utm_term: string | null;
+  meta_ad_id: string | null;
+  meta_ad_name: string | null;
 };
 
 export type ManualConversionCreatePayload = {

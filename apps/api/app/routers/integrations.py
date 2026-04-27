@@ -145,10 +145,14 @@ def trackcore_event(
         meta_ad_name=attr.meta_ad_name,
     )
     stmt = stmt.on_conflict_do_nothing(index_elements=["external_event_id"])
+    # `.returning` faz com que `result.scalar()` traga o id quando insere e
+    # None quando bate o ON CONFLICT DO NOTHING — workaround do quirk do
+    # psycopg que nao popula rowcount em DO NOTHING.
+    stmt = stmt.returning(ManualConversion.id)
     result = db.execute(stmt)
     db.commit()
 
-    inserted = result.rowcount > 0
+    inserted = result.scalar_one_or_none() is not None
     return {
         "status": "ok",
         "client": client.slug,

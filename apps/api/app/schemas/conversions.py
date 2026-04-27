@@ -44,3 +44,13 @@ class ManualConversionRead(BaseModel):
     created_by_id: int | None
     created_by_name: str | None = None
     created_at: datetime
+    # Origem + atribuicao (preenchidos quando vem do Trackcore via webhook)
+    attribution_source: str = "manual"
+    external_event_id: str | None = None
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_campaign: str | None = None
+    utm_content: str | None = None
+    utm_term: str | None = None
+    meta_ad_id: str | None = None
+    meta_ad_name: str | None = None
