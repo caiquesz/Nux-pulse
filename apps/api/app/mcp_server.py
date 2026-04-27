@@ -29,6 +29,12 @@ from app.models.client import Client
 from app.models.connection import AccountConnection, Platform
 from app.models.meta import MetaCampaign, MetaInsightsDaily
 from app.models.project import Notification, Task
+# Reuso intencional dos helpers de conversão já validados em produção pelas
+# telas /c/[slug]/overview e /c/[slug]/meta — o JSONB `actions`/`action_values`
+# precisa ser desambiguado (mesmo evento aparece sob N action_types) antes de
+# somar, e essa lógica vive em insights.py.
+from app.routers.insights import _aggregate_conversions
+from app.routers.conversions import aggregate_manuals
 
 
 mcp = FastMCP(
@@ -264,15 +270,13 @@ def get_meta_overview(slug: str, days: int = 7) -> dict:
         c = _client_or_error(db, slug)
         until = datetime.now(timezone.utc).date()
         since = until - timedelta(days=days - 1)
+
+        # Volume / custo — colunas escalares
         base = (
             db.query(
                 func.coalesce(func.sum(MetaInsightsDaily.spend), 0).label("spend"),
                 func.coalesce(func.sum(MetaInsightsDaily.impressions), 0).label("impressions"),
                 func.coalesce(func.sum(MetaInsightsDaily.clicks), 0).label("clicks"),
-                func.coalesce(func.sum(MetaInsightsDaily.messages), 0).label("messages"),
-                func.coalesce(func.sum(MetaInsightsDaily.leads), 0).label("leads"),
-                func.coalesce(func.sum(MetaInsightsDaily.purchases), 0).label("purchases"),
-                func.coalesce(func.sum(MetaInsightsDaily.revenue), 0).label("revenue"),
             )
             .filter(
                 MetaInsightsDaily.client_id == c.id,
@@ -283,10 +287,31 @@ def get_meta_overview(slug: str, days: int = 7) -> dict:
             )
             .one()
         )
+
+        # Conversões — extraídas do JSONB actions/action_values com a mesma
+        # lógica de desambiguação usada pelas telas (evita double-counting).
+        conv_rows = (
+            db.query(MetaInsightsDaily.actions, MetaInsightsDaily.action_values)
+            .filter(
+                MetaInsightsDaily.client_id == c.id,
+                MetaInsightsDaily.level == "account",
+                MetaInsightsDaily.breakdown_key == "none",
+                MetaInsightsDaily.date >= since,
+                MetaInsightsDaily.date <= until,
+            )
+            .all()
+        )
+        api_conv = _aggregate_conversions(conv_rows)
+        manual = aggregate_manuals(db, c.id, since, until)
+
         spend = float(base.spend or 0)
         impressions = int(base.impressions or 0)
         clicks = int(base.clicks or 0)
-        revenue = float(base.revenue or 0)
+        messages = api_conv["messages"] + manual["messages"]
+        leads = api_conv["leads"] + manual["leads"]
+        purchases = api_conv["purchases"] + manual["purchases"]
+        revenue = round(api_conv["revenue"] + manual["revenue"], 2)
+
         return {
             "client_slug": slug,
             "period_days": days,
@@ -297,10 +322,10 @@ def get_meta_overview(slug: str, days: int = 7) -> dict:
             "clicks": clicks,
             "ctr": round((clicks / impressions * 100) if impressions else 0, 2),
             "cpc": round((spend / clicks) if clicks else 0, 2),
-            "messages": int(base.messages or 0),
-            "leads": int(base.leads or 0),
-            "purchases": int(base.purchases or 0),
-            "revenue": round(revenue, 2),
+            "messages": messages,
+            "leads": leads,
+            "purchases": purchases,
+            "revenue": revenue,
             "roas": round((revenue / spend) if spend else 0, 2),
         }
     finally:
