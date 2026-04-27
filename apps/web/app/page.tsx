@@ -1,15 +1,19 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { ClientCard } from "@/components/ClientCard";
+import { ClientRow } from "@/components/ClientRow";
+import { Sparkline } from "@/components/primitives/Sparkline";
 import { TierBadge } from "@/components/TierBadge";
+import { TimePeriodSelector } from "@/components/TimePeriodSelector";
 import {
   createClient, listNiches, portfolioOverview,
-  type ClientCreatePayload, type Tier,
+  type ClientCreatePayload, type PeriodKey, type Tier,
 } from "@/lib/api";
 
 const COLOR_PRESETS = ["#8A5A3B", "#2B6A4F", "#B5454B", "#3B5A8A", "#6B4A8A", "#6F6B68"];
+const VALID_PERIODS: PeriodKey[] = ["7d", "30d", "90d", "mtd", "ytd"];
 
 function slugify(s: string): string {
   return s
@@ -26,10 +30,34 @@ const fmtBRL = (v: number) =>
 const fmtDate = (iso: string) =>
   new Date(`${iso}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
 
+const PERIOD_LABEL: Record<PeriodKey, string> = {
+  "7d": "últimos 7 dias",
+  "30d": "últimos 30 dias",
+  "90d": "últimos 90 dias",
+  "mtd": "mês até hoje",
+  "ytd": "ano até hoje",
+  "custom": "intervalo customizado",
+};
+
 export default function CommandCenter() {
   const qc = useQueryClient();
-  const overviewQ = useQuery({ queryKey: ["portfolio-overview"], queryFn: portfolioOverview });
+  const router = useRouter();
+  const params = useSearchParams();
+  const periodParam = (params?.get("period") ?? "30d") as PeriodKey;
+  const period: PeriodKey = VALID_PERIODS.includes(periodParam) ? periodParam : "30d";
+
+  const overviewQ = useQuery({
+    queryKey: ["portfolio-overview", period],
+    queryFn: () => portfolioOverview({ period }),
+  });
   const nichesQ = useQuery({ queryKey: ["niches"], queryFn: listNiches });
+
+  function setPeriod(p: PeriodKey) {
+    const sp = new URLSearchParams(params?.toString() ?? "");
+    if (p === "30d") sp.delete("period"); else sp.set("period", p);
+    const qs = sp.toString();
+    router.replace(`/${qs ? `?${qs}` : ""}`, { scroll: false });
+  }
 
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -74,40 +102,50 @@ export default function CommandCenter() {
     });
   }, [data]);
 
+  // sparkline data agregada do portfolio
+  const portfolioSpendSeries = data?.daily_series.map((d) => d.spend) ?? [];
+  const portfolioRevenueSeries = data?.daily_series.map((d) => d.revenue) ?? [];
+  const sparklineLabels = data?.daily_series.map((d) =>
+    new Date(`${d.date}T12:00:00`).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "")
+  ) ?? [];
+
   return (
     <main style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)" }}>
-      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "32px 24px 48px" }}>
+      <div style={{ maxWidth: 1320, margin: "0 auto", padding: "32px 24px 56px" }}>
         {/* HEADER */}
         <header style={{
           display: "flex", justifyContent: "space-between", alignItems: "flex-end",
-          marginBottom: 22, gap: 16,
+          marginBottom: 24, gap: 24, flexWrap: "wrap",
         }}>
           <div>
             <div className="mono" style={{
               fontSize: 10, color: "var(--ink-4)",
-              letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 600,
+              letterSpacing: 1.4, textTransform: "uppercase", fontWeight: 600,
               marginBottom: 6,
             }}>
               Portfolio NUX
             </div>
             <h1 style={{
-              fontSize: 26, fontWeight: 700, letterSpacing: "-0.5px", lineHeight: 1.1,
+              fontSize: 28, fontWeight: 700, letterSpacing: "-0.6px", lineHeight: 1.05,
               margin: 0,
             }}>
               Command Center
             </h1>
             {data && (
               <div className="mono" style={{
-                fontSize: 11, color: "var(--ink-3)", marginTop: 6,
+                fontSize: 11, color: "var(--ink-3)", marginTop: 7,
                 letterSpacing: 0.3,
               }}>
-                {data.kpis.active_clients} clientes ativos · MTD desde {fmtDate(data.month_start)}
+                {data.kpis.active_clients} clientes · {PERIOD_LABEL[period]} · {fmtDate(data.period.since)} → {fmtDate(data.period.until)}
               </div>
             )}
           </div>
-          {!showForm && (
-            <button className="btn" onClick={() => setShowForm(true)}>+ Novo cliente</button>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <TimePeriodSelector value={period} onChange={setPeriod} />
+            {!showForm && (
+              <button className="btn" onClick={() => setShowForm(true)}>+ Cliente</button>
+            )}
+          </div>
         </header>
 
         {overviewQ.isError && (
@@ -199,42 +237,53 @@ export default function CommandCenter() {
           </form>
         )}
 
-        {/* PRIMARY KPIs — 3 grandes em row */}
+        {/* PRIMARY KPIs com sparkline */}
         {data && (
           <section style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 12, marginBottom: 10,
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 12, marginBottom: 12,
           }}>
-            <PrimaryKpi
-              label="Spend MTD"
-              value={fmtBRL(data.kpis.portfolio_spend_mtd)}
+            <KpiTile
+              label="Spend"
+              value={fmtBRL(data.kpis.portfolio_spend)}
+              series={portfolioSpendSeries}
+              labels={sparklineLabels}
+              tooltipFmt={fmtBRL}
             />
-            <PrimaryKpi
-              label="Receita MTD"
-              value={fmtBRL(data.kpis.portfolio_revenue_mtd)}
-              tone={data.kpis.portfolio_revenue_mtd > 0 ? "pos" : "muted"}
+            <KpiTile
+              label="Receita"
+              value={fmtBRL(data.kpis.portfolio_revenue)}
+              series={portfolioRevenueSeries}
+              labels={sparklineLabels}
+              tooltipFmt={fmtBRL}
+              tone={data.kpis.portfolio_revenue > 0 ? "pos" : "muted"}
             />
-            <PrimaryKpi
-              label="ROAS MTD"
-              value={`${data.kpis.portfolio_roas_mtd.toFixed(2)}x`}
+            <KpiTile
+              label="ROAS"
+              value={`${data.kpis.portfolio_roas.toFixed(2)}x`}
               tone={
-                data.kpis.portfolio_roas_mtd >= 2 ? "pos" :
-                data.kpis.portfolio_roas_mtd >= 1 ? "neutral" : "neg"
+                data.kpis.portfolio_roas >= 2 ? "pos" :
+                data.kpis.portfolio_roas >= 1 ? "neutral" : "muted"
               }
               hint={
-                data.kpis.portfolio_roas_mtd < 1 && data.kpis.portfolio_revenue_mtd === 0
+                data.kpis.portfolio_roas < 1 && data.kpis.portfolio_revenue === 0
                   ? "tracking pendente"
                   : undefined
               }
             />
+            <KpiTile
+              label="Alertas críticos"
+              value={String(data.kpis.critical_alerts)}
+              tone={data.kpis.critical_alerts > 0 ? "neg" : "muted"}
+            />
           </section>
         )}
 
-        {/* SECONDARY KPIs — chips inline */}
+        {/* SECONDARY chips: clientes / tier / delta */}
         {data && (
           <section style={{
-            display: "flex", flexWrap: "wrap", gap: 6,
+            display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center",
             marginBottom: 22,
           }}>
             <SecondaryChip label="Clientes" value={String(data.kpis.active_clients)} />
@@ -242,11 +291,6 @@ export default function CommandCenter() {
               label="Tier S+A"
               value={`${data.kpis.pct_sa.toFixed(0)}%`}
               tone={data.kpis.pct_sa >= 50 ? "pos" : "muted"}
-            />
-            <SecondaryChip
-              label="Alertas críticos"
-              value={String(data.kpis.critical_alerts)}
-              tone={data.kpis.critical_alerts > 0 ? "neg" : "muted"}
             />
             <SecondaryChip
               label="Δ score 7d"
@@ -265,10 +309,8 @@ export default function CommandCenter() {
           </section>
         )}
 
-        {/* GRID DE CLIENTES */}
-        {overviewQ.isLoading && (
-          <p style={{ color: "var(--ink-3)", fontSize: 13 }}>Carregando clientes…</p>
-        )}
+        {/* LIST DE CLIENTES */}
+        {overviewQ.isLoading && <SkeletonList />}
         {data && data.clients.length === 0 && !showForm && (
           <div className="card" style={{ padding: 32, textAlign: "center" }}>
             <p style={{ color: "var(--ink-3)", fontSize: 14, marginBottom: 16 }}>
@@ -278,13 +320,9 @@ export default function CommandCenter() {
           </div>
         )}
         {data && data.clients.length > 0 && (
-          <section style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))",
-            gap: 14,
-          }}>
+          <section style={{ display: "grid", gap: 8 }}>
             {sortedClients.map((c) => (
-              <ClientCard key={c.slug} row={c} />
+              <ClientRow key={c.slug} row={c} />
             ))}
           </section>
         )}
@@ -293,11 +331,19 @@ export default function CommandCenter() {
   );
 }
 
-// ─── PRIMARY KPI tile ──────────────────────────────────────────────────────
+// ─── PRIMARY KPI tile com sparkline opcional ───────────────────────────────
 
-function PrimaryKpi({
-  label, value, tone = "neutral", hint,
-}: { label: string; value: string; tone?: "pos" | "neg" | "neutral" | "muted"; hint?: string }) {
+function KpiTile({
+  label, value, tone = "neutral", hint, series, labels, tooltipFmt,
+}: {
+  label: string;
+  value: string;
+  tone?: "pos" | "neg" | "neutral" | "muted";
+  hint?: string;
+  series?: number[];
+  labels?: string[];
+  tooltipFmt?: (v: number) => string;
+}) {
   const color =
     tone === "pos" ? "var(--pos)" :
     tone === "neg" ? "var(--neg)" :
@@ -306,8 +352,9 @@ function PrimaryKpi({
 
   return (
     <div className="card" style={{
-      padding: "16px 18px 14px",
-      display: "flex", flexDirection: "column", gap: 6,
+      padding: "14px 16px 12px",
+      display: "flex", flexDirection: "column", gap: 4,
+      minHeight: 110,
     }}>
       <div className="mono" style={{
         fontSize: 9, color: "var(--ink-4)",
@@ -316,24 +363,32 @@ function PrimaryKpi({
         {label}
       </div>
       <div className="mono" style={{
-        fontSize: 26, fontWeight: 700, lineHeight: 1.1, color,
+        fontSize: 24, fontWeight: 700, lineHeight: 1.1, color,
         fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em",
       }}>
         {value}
       </div>
       {hint && (
         <div style={{
-          fontSize: 10, color: "var(--ink-4)",
-          fontStyle: "italic", marginTop: -2,
+          fontSize: 10, color: "var(--ink-4)", fontStyle: "italic",
         }}>
           {hint}
+        </div>
+      )}
+      {series && series.length > 1 && (
+        <div style={{ marginTop: "auto", paddingTop: 6 }}>
+          <Sparkline
+            series={series}
+            labels={labels}
+            format={tooltipFmt}
+            height={26}
+            style="area"
+          />
         </div>
       )}
     </div>
   );
 }
-
-// ─── SECONDARY KPI chip — denso, inline ────────────────────────────────────
 
 function SecondaryChip({
   label, value, tone = "neutral",
@@ -367,8 +422,6 @@ function SecondaryChip({
     </span>
   );
 }
-
-// ─── TIER BREAKDOWN — chips compactos ─────────────────────────────────────
 
 function TierBreakdownChips({
   breakdown,
@@ -414,6 +467,31 @@ function TierBreakdownChips({
           </span>
         </span>
       )}
+    </div>
+  );
+}
+
+function SkeletonList() {
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className="card"
+          style={{
+            height: 60,
+            opacity: 0.5,
+            animation: "skeleton-pulse 1.4s ease-in-out infinite",
+            animationDelay: `${i * 80}ms`,
+          }}
+        />
+      ))}
+      <style jsx>{`
+        @keyframes skeleton-pulse {
+          0%, 100% { opacity: 0.3; }
+          50% { opacity: 0.6; }
+        }
+      `}</style>
     </div>
   );
 }

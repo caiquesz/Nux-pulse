@@ -28,20 +28,157 @@ _log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["portfolio"])
 
 
-@router.get("/portfolio/overview")
-def portfolio_overview(db: Session = Depends(get_db)):
-    """Agregacao para a home do Command Center.
+def _resolve_period(period: str | None, since: str | None, until: str | None) -> tuple[date, date, str]:
+    """Mapeia o param period (7d|30d|90d|mtd|ytd|custom) pra (since, until, label).
 
-    Retorna:
-    - kpis: portfolio-level (clientes ativos, spend MTD, receita MTD, ROAS,
-      % S/A, # alertas critical, delta score medio 7d)
-    - tier_breakdown: { S, A, B, C, D, none } -> count
-    - clients: lista [{slug, name, niche_code, accent_color, tier, score,
-      delta_vs_prev, monthly_budget, monthly_revenue_goal, mtd_spend,
-      mtd_revenue, alerts: {neg, warn, info}}]
+    custom requer since e until. Default = 30d.
     """
     today = date.today()
-    month_start = date(today.year, today.month, 1)
+    if since and until:
+        return date.fromisoformat(since), date.fromisoformat(until), "custom"
+    p = (period or "30d").lower()
+    if p == "7d":
+        return today - timedelta(days=6), today, "7d"
+    if p == "30d":
+        return today - timedelta(days=29), today, "30d"
+    if p == "90d":
+        return today - timedelta(days=89), today, "90d"
+    if p == "mtd":
+        return date(today.year, today.month, 1), today, "mtd"
+    if p == "ytd":
+        return date(today.year, 1, 1), today, "ytd"
+    # fallback
+    return today - timedelta(days=29), today, "30d"
+
+
+def _client_window_metrics(db: Session, client_id: int, since: date, until: date) -> dict:
+    """Spend + revenue agregados na janela. Retorna spend, revenue, roas."""
+    spend = float(
+        db.query(func.coalesce(func.sum(MetaInsightsDaily.spend), 0))
+        .filter(
+            MetaInsightsDaily.client_id == client_id,
+            MetaInsightsDaily.level == "account",
+            MetaInsightsDaily.breakdown_key == "none",
+            MetaInsightsDaily.date >= since,
+            MetaInsightsDaily.date <= until,
+        )
+        .scalar() or 0
+    )
+    conv_rows = (
+        db.query(MetaInsightsDaily.actions, MetaInsightsDaily.action_values)
+        .filter(
+            MetaInsightsDaily.client_id == client_id,
+            MetaInsightsDaily.level == "account",
+            MetaInsightsDaily.breakdown_key == "none",
+            MetaInsightsDaily.date >= since,
+            MetaInsightsDaily.date <= until,
+        )
+        .all()
+    )
+    api_conv = _aggregate_conversions(conv_rows)
+    manual = aggregate_manuals(db, client_id, since, until)
+    revenue = round(api_conv["revenue"] + manual["revenue"], 2)
+    return {
+        "spend": round(spend, 2),
+        "revenue": revenue,
+        "roas": round(revenue / spend, 2) if spend > 0 else None,
+    }
+
+
+def _client_daily_series(db: Session, client_id: int, since: date, until: date) -> list[dict]:
+    """Serie diaria (spend, revenue) pra alimentar sparklines.
+
+    Pra cada dia da janela, soma spend e revenue (incluindo manual_conversions).
+    Dias sem dado retornam 0.
+    """
+    spend_rows = (
+        db.query(MetaInsightsDaily.date, func.coalesce(func.sum(MetaInsightsDaily.spend), 0))
+        .filter(
+            MetaInsightsDaily.client_id == client_id,
+            MetaInsightsDaily.level == "account",
+            MetaInsightsDaily.breakdown_key == "none",
+            MetaInsightsDaily.date >= since,
+            MetaInsightsDaily.date <= until,
+        )
+        .group_by(MetaInsightsDaily.date)
+        .all()
+    )
+    spend_by_date: dict[date, float] = {d: float(s or 0) for d, s in spend_rows}
+
+    conv_rows = (
+        db.query(MetaInsightsDaily.date, MetaInsightsDaily.actions, MetaInsightsDaily.action_values)
+        .filter(
+            MetaInsightsDaily.client_id == client_id,
+            MetaInsightsDaily.level == "account",
+            MetaInsightsDaily.breakdown_key == "none",
+            MetaInsightsDaily.date >= since,
+            MetaInsightsDaily.date <= until,
+        )
+        .all()
+    )
+    api_revenue_by_date: dict[date, float] = {}
+    for d, acts, vals in conv_rows:
+        # Reusa _aggregate_conversions com 1 row tipada
+        class _R: pass
+        r = _R(); r.actions = acts; r.action_values = vals
+        out = _aggregate_conversions([r])
+        api_revenue_by_date[d] = api_revenue_by_date.get(d, 0.0) + out["revenue"]
+
+    # Manual conversions agregadas por dia
+    from app.models.conversions import ManualConversion
+    manual_rows = (
+        db.query(
+            ManualConversion.date,
+            func.coalesce(func.sum(ManualConversion.revenue), 0).label("rev"),
+        )
+        .filter(
+            ManualConversion.client_id == client_id,
+            ManualConversion.kind == "purchase",
+            ManualConversion.date >= since,
+            ManualConversion.date <= until,
+        )
+        .group_by(ManualConversion.date)
+        .all()
+    )
+    manual_revenue_by_date: dict[date, float] = {d: float(r or 0) for d, r in manual_rows}
+
+    out: list[dict] = []
+    cur = since
+    while cur <= until:
+        out.append({
+            "date": cur.isoformat(),
+            "spend": round(spend_by_date.get(cur, 0.0), 2),
+            "revenue": round(
+                api_revenue_by_date.get(cur, 0.0) + manual_revenue_by_date.get(cur, 0.0),
+                2,
+            ),
+        })
+        cur += timedelta(days=1)
+    return out
+
+
+@router.get("/portfolio/overview")
+def portfolio_overview(
+    period: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Agregacao para a home do Command Center.
+
+    Query params:
+      ?period=7d|30d|90d|mtd|ytd  (default 30d)
+      ?since=YYYY-MM-DD&until=YYYY-MM-DD  (custom range, sobrescreve period)
+
+    Retorna:
+    - period: { since, until, label }
+    - kpis: portfolio-level no periodo (spend, revenue, roas, alerts, etc)
+    - daily_series: agregado portfolio-wide diario (sparkline-ready)
+    - tier_breakdown: { S, A, B, C, D, none } -> count
+    - clients: lista detalhada com metricas do periodo + serie diaria por cliente
+    """
+    today = date.today()
+    p_since, p_until, p_label = _resolve_period(period, since, until)
 
     clients = db.query(Client).filter(Client.is_active.is_(True)).order_by(Client.name).all()
 
@@ -50,40 +187,21 @@ def portfolio_overview(db: Session = Depends(get_db)):
 
     portfolio_spend = 0.0
     portfolio_revenue = 0.0
+    portfolio_daily: dict[str, dict[str, float]] = {}
     clients_payload = []
 
     for c in clients:
         tier_breakdown[c.tier_current or "none"] = tier_breakdown.get(c.tier_current or "none", 0) + 1
 
-        # MTD spend + revenue
-        mtd_spend = float(
-            db.query(func.coalesce(func.sum(MetaInsightsDaily.spend), 0))
-            .filter(
-                MetaInsightsDaily.client_id == c.id,
-                MetaInsightsDaily.level == "account",
-                MetaInsightsDaily.breakdown_key == "none",
-                MetaInsightsDaily.date >= month_start,
-                MetaInsightsDaily.date <= today,
-            )
-            .scalar() or 0
-        )
-        conv_rows = (
-            db.query(MetaInsightsDaily.actions, MetaInsightsDaily.action_values)
-            .filter(
-                MetaInsightsDaily.client_id == c.id,
-                MetaInsightsDaily.level == "account",
-                MetaInsightsDaily.breakdown_key == "none",
-                MetaInsightsDaily.date >= month_start,
-                MetaInsightsDaily.date <= today,
-            )
-            .all()
-        )
-        api_conv = _aggregate_conversions(conv_rows)
-        manual = aggregate_manuals(db, c.id, month_start, today)
-        mtd_revenue = round(api_conv["revenue"] + manual["revenue"], 2)
+        m = _client_window_metrics(db, c.id, p_since, p_until)
+        daily = _client_daily_series(db, c.id, p_since, p_until)
+        portfolio_spend += m["spend"]
+        portfolio_revenue += m["revenue"]
 
-        portfolio_spend += mtd_spend
-        portfolio_revenue += mtd_revenue
+        for d in daily:
+            agg = portfolio_daily.setdefault(d["date"], {"spend": 0.0, "revenue": 0.0})
+            agg["spend"] += d["spend"]
+            agg["revenue"] += d["revenue"]
 
         # alertas abertos por severidade
         alert_counts = (
@@ -100,14 +218,12 @@ def portfolio_overview(db: Session = Depends(get_db)):
         for sev, cnt in alert_counts:
             alerts[sev] = cnt
 
-        # ultima sincronizacao Meta
         last_sync = (
             db.query(func.max(MetaInsightsDaily.date))
             .filter(MetaInsightsDaily.client_id == c.id)
             .scalar()
         )
 
-        # delta da ultima semana (denormalizado em clients seria ideal — TODO)
         from app.models.scoring import ClientScore
         last_score = (
             db.query(ClientScore)
@@ -130,8 +246,10 @@ def portfolio_overview(db: Session = Depends(get_db)):
             "score_updated_at": c.score_updated_at.isoformat() if c.score_updated_at else None,
             "monthly_budget": float(c.monthly_budget) if c.monthly_budget else None,
             "monthly_revenue_goal": float(c.monthly_revenue_goal) if c.monthly_revenue_goal else None,
-            "mtd_spend": round(mtd_spend, 2),
-            "mtd_revenue": mtd_revenue,
+            "spend": m["spend"],
+            "revenue": m["revenue"],
+            "roas": m["roas"],
+            "daily_series": daily,
             "last_sync_date": last_sync.isoformat() if last_sync else None,
             "alerts": alerts,
         })
@@ -151,19 +269,35 @@ def portfolio_overview(db: Session = Depends(get_db)):
         .scalar() or 0
     )
 
+    # Serializa serie agregada do portfolio em ordem cronologica
+    daily_series_sorted = [
+        {
+            "date": d,
+            "spend": round(portfolio_daily[d]["spend"], 2),
+            "revenue": round(portfolio_daily[d]["revenue"], 2),
+        }
+        for d in sorted(portfolio_daily.keys())
+    ]
+
     return {
         "as_of": today.isoformat(),
-        "month_start": month_start.isoformat(),
+        "period": {
+            "since": p_since.isoformat(),
+            "until": p_until.isoformat(),
+            "label": p_label,
+            "days": (p_until - p_since).days + 1,
+        },
         "kpis": {
             "active_clients": len(clients),
-            "portfolio_spend_mtd": round(portfolio_spend, 2),
-            "portfolio_revenue_mtd": round(portfolio_revenue, 2),
-            "portfolio_roas_mtd": portfolio_roas,
+            "portfolio_spend": round(portfolio_spend, 2),
+            "portfolio_revenue": round(portfolio_revenue, 2),
+            "portfolio_roas": portfolio_roas,
             "pct_sa": pct_sa,
             "critical_alerts": crit_alerts,
             "avg_delta_7d": avg_delta,
         },
         "tier_breakdown": tier_breakdown,
+        "daily_series": daily_series_sorted,
         "clients": clients_payload,
     }
 

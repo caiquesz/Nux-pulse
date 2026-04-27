@@ -552,6 +552,8 @@ export const deleteManualConversion = (id: number) =>
 
 export type Tier = "S" | "A" | "B" | "C" | "D";
 
+export type DailyPoint = { date: string; spend: number; revenue: number };
+
 export type ClientPortfolioRow = {
   slug: string;
   name: string;
@@ -563,29 +565,52 @@ export type ClientPortfolioRow = {
   score_updated_at: string | null;
   monthly_budget: number | null;
   monthly_revenue_goal: number | null;
-  mtd_spend: number;
-  mtd_revenue: number;
+  spend: number;
+  revenue: number;
+  roas: number | null;
+  daily_series: DailyPoint[];
   last_sync_date: string | null;
   alerts: { neg: number; warn: number; info: number; pos: number };
 };
 
+export type PeriodKey = "7d" | "30d" | "90d" | "mtd" | "ytd" | "custom";
+
 export type PortfolioOverview = {
   as_of: string;
-  month_start: string;
+  period: {
+    since: string;
+    until: string;
+    label: PeriodKey;
+    days: number;
+  };
   kpis: {
     active_clients: number;
-    portfolio_spend_mtd: number;
-    portfolio_revenue_mtd: number;
-    portfolio_roas_mtd: number;
+    portfolio_spend: number;
+    portfolio_revenue: number;
+    portfolio_roas: number;
     pct_sa: number;
     critical_alerts: number;
     avg_delta_7d: number | null;
   };
   tier_breakdown: Record<"S" | "A" | "B" | "C" | "D" | "none", number>;
+  daily_series: DailyPoint[];
   clients: ClientPortfolioRow[];
 };
 
-export const portfolioOverview = () => get<PortfolioOverview>("/api/portfolio/overview");
+export type PortfolioOverviewOpts = {
+  period?: PeriodKey;
+  since?: string;
+  until?: string;
+};
+
+export const portfolioOverview = (opts: PortfolioOverviewOpts = {}) => {
+  const q = new URLSearchParams();
+  if (opts.period) q.set("period", opts.period);
+  if (opts.since) q.set("since", opts.since);
+  if (opts.until) q.set("until", opts.until);
+  const qs = q.toString();
+  return get<PortfolioOverview>(`/api/portfolio/overview${qs ? `?${qs}` : ""}`);
+};
 
 // ─── niches ──────────────────────────────────────────────────────────────
 export type Niche = { code: string; name: string; created_at: string };
