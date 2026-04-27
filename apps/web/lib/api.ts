@@ -578,3 +578,57 @@ export const portfolioOverview = () => get<PortfolioOverview>("/api/portfolio/ov
 // ─── niches ──────────────────────────────────────────────────────────────
 export type Niche = { code: string; name: string; created_at: string };
 export const listNiches = () => get<Niche[]>("/api/niches");
+
+export type NicheBand = "pos" | "neutral" | "neg" | null;
+
+export type NicheComparisonClient = {
+  slug: string;
+  name: string;
+  accent_color: string | null;
+  tier: Tier | null;
+  score: number | null;
+  score_updated_at: string | null;
+  monthly_budget: number | null;
+  monthly_revenue_goal: number | null;
+  metrics: {
+    spend: number;
+    impressions: number;
+    clicks: number;
+    ctr_pct: number | null;
+    cpc: number | null;
+    revenue: number;
+    roas: number | null;
+    messages: number;
+    leads: number;
+    purchases: number;
+  };
+  mtd_spend: number;
+  mtd_revenue: number;
+  ranks: {
+    score: number | null;
+    ctr: number | null;
+    cpc: number | null;
+    roas: number | null;
+  };
+  bands: {
+    ctr: NicheBand;
+    cpc: NicheBand;
+    roas: NicheBand;
+  };
+};
+
+export type NicheBenchmarkBand = { p25: number; p50: number; p75: number };
+
+export type NicheComparison = {
+  niche: { code: string; name: string; n_clients: number };
+  window: { since: string; until: string; days: number };
+  benchmarks: {
+    industry: Record<string, NicheBenchmarkBand>;
+    portfolio: Record<string, NicheBenchmarkBand>;
+  };
+  portfolio_avg: { ctr_pct: number | null; cpc: number | null; roas: number | null };
+  clients: NicheComparisonClient[];
+};
+
+export const nicheComparison = (code: string, days = 30) =>
+  get<NicheComparison>(`/api/portfolio/niches/${code}/comparison?days=${days}`);

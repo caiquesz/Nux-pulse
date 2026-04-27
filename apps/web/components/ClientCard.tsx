@@ -5,6 +5,26 @@ import { Delta } from "./primitives/Delta";
 import { TierBadge } from "./TierBadge";
 import type { ClientPortfolioRow } from "@/lib/api";
 
+function NicheLink({ code }: { code: string }) {
+  return (
+    <Link
+      href={`/nicho/${code}`}
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        marginLeft: 6,
+        color: "var(--ink-3)",
+        fontSize: 9,
+        textDecoration: "none",
+        borderBottom: "1px dashed var(--ink-4)",
+        paddingBottom: 1,
+      }}
+      title="Ver comparativo do nicho"
+    >
+      comparar →
+    </Link>
+  );
+}
+
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
@@ -39,7 +59,12 @@ export function ClientCard({ row }: { row: ClientPortfolioRow }) {
               {row.name}
             </div>
             <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginTop: 2 }}>
-              {row.niche_code ?? "sem nicho"}
+              {row.niche_code ? (
+                <>
+                  {row.niche_code}
+                  <NicheLink code={row.niche_code} />
+                </>
+              ) : "sem nicho"}
             </div>
           </div>
           {totalAlerts > 0 && (
