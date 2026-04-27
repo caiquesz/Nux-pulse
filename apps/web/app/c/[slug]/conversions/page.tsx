@@ -337,15 +337,32 @@ function RowItem({ row, onEdit, onDelete }: {
     >
       <td style={tdStyle} className="mono">{fmtDateBr(row.date)}</td>
       <td style={tdStyle}>
-        <span style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          fontSize: 11, padding: "3px 9px", borderRadius: 999,
-          background: "var(--surface-2)", color: "var(--ink-2)",
-          fontWeight: 500,
-        }}>
-          <span style={{ width: 6, height: 6, borderRadius: "50%", background: cfg.color }} />
-          {cfg.label}
-        </span>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            fontSize: 11, padding: "3px 9px", borderRadius: 999,
+            background: "var(--surface-2)", color: "var(--ink-2)",
+            fontWeight: 500,
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: cfg.color }} />
+            {cfg.label}
+          </span>
+          {row.attribution_source && row.attribution_source !== "manual" && (
+            <span
+              className="mono"
+              title={`Origem: ${row.attribution_source}${row.external_event_id ? ` · id ${row.external_event_id}` : ""}`}
+              style={{
+                fontSize: 9, padding: "2px 6px", borderRadius: 3,
+                background: "color-mix(in srgb, var(--info) 20%, transparent)",
+                color: "var(--info)",
+                letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 700,
+                border: "1px solid color-mix(in srgb, var(--info) 40%, transparent)",
+              }}
+            >
+              {row.attribution_source}
+            </span>
+          )}
+        </div>
       </td>
       <td style={{ ...tdStyle, textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
         {row.count}
@@ -353,20 +370,8 @@ function RowItem({ row, onEdit, onDelete }: {
       <td style={{ ...tdStyle, textAlign: "right", fontVariantNumeric: "tabular-nums" }} className="mono">
         {row.kind === "purchase" && row.revenue ? fmtBRL(Number(row.revenue)) : <span style={{ color: "var(--ink-4)" }}>—</span>}
       </td>
-      <td style={{ ...tdStyle, fontSize: 12, color: "var(--ink-3)", maxWidth: 300 }}>
-        {row.campaign_name ? (
-          <span style={{ color: "var(--ink-2)", fontWeight: 500 }}>{row.campaign_name}</span>
-        ) : null}
-        {row.campaign_name && row.notes ? <span style={{ margin: "0 6px", color: "var(--ink-4)" }}>·</span> : null}
-        {row.notes ? (
-          <span style={{
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-            display: "inline-block", maxWidth: 220, verticalAlign: "bottom",
-          }}>
-            {row.notes}
-          </span>
-        ) : null}
-        {!row.campaign_name && !row.notes && <span style={{ color: "var(--ink-4)" }}>—</span>}
+      <td style={{ ...tdStyle, fontSize: 12, color: "var(--ink-3)", maxWidth: 320 }}>
+        <AttributionCell row={row} />
       </td>
       <td style={{ ...tdStyle, fontSize: 11, color: "var(--ink-3)" }}>
         {row.created_by_name ?? "—"}
@@ -398,6 +403,58 @@ function RowItem({ row, onEdit, onDelete }: {
         )}
       </td>
     </tr>
+  );
+}
+
+function AttributionCell({ row }: { row: ManualConversion }) {
+  // Prioridade de exibicao: nome do anuncio Meta > nome da campanha Meta >
+  // campanha registrada manualmente > UTM campaign. Tudo no mesmo "espirito"
+  // de "que campanha gerou esse evento", indo do mais especifico ao mais geral.
+  const primary =
+    row.meta_ad_name ||
+    row.campaign_name ||
+    row.utm_campaign ||
+    null;
+
+  // Linha secundaria: utm/source-medium quando relevante
+  const utmBits: string[] = [];
+  if (row.utm_source) utmBits.push(`src:${row.utm_source}`);
+  if (row.utm_medium) utmBits.push(`med:${row.utm_medium}`);
+  if (row.meta_ad_id && !row.meta_ad_name) utmBits.push(`ad:${row.meta_ad_id}`);
+
+  const hasNothing = !primary && !row.notes && utmBits.length === 0;
+  if (hasNothing) return <span style={{ color: "var(--ink-4)" }}>—</span>;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      {primary && (
+        <span style={{
+          color: "var(--ink-2)", fontWeight: 500,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          maxWidth: 320,
+        }}>
+          {primary}
+        </span>
+      )}
+      {row.notes && (
+        <span style={{
+          fontSize: 11, color: "var(--ink-3)",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          maxWidth: 320,
+        }}>
+          {row.notes}
+        </span>
+      )}
+      {utmBits.length > 0 && (
+        <span className="mono" style={{
+          fontSize: 9, color: "var(--ink-4)", letterSpacing: 0.3,
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          maxWidth: 320,
+        }}>
+          {utmBits.join(" · ")}
+        </span>
+      )}
+    </div>
   );
 }
 
