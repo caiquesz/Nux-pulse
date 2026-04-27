@@ -7,7 +7,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.auth import require_api_key
 from app.core.config import settings
 from app.mcp_server import mcp
-from app.routers import clients, conversions, health, insights, niches, portfolio, project, sync
+from app.routers import clients, conversions, health, insights, integrations, niches, portfolio, project, sync
 
 # ─── MCP sub-app (precisa ser criado antes do FastAPI principal pra
 # propagar o `lifespan` — fastmcp usa task groups que só inicializam
@@ -75,6 +75,9 @@ app.include_router(sync.router, dependencies=_protected)
 app.include_router(insights.router, dependencies=_protected)
 app.include_router(project.router, dependencies=_protected)
 app.include_router(conversions.router, dependencies=_protected)
+# Integrations: o router tem auth proprio (X-Trackcore-Secret), nao usa
+# X-API-Key. Trackcore nao precisa saber da nossa API_SECRET_KEY.
+app.include_router(integrations.router)
 
 # Monta o MCP server em /mcp (streamable-http transport). Cliente Claude Desktop
 # conecta via https://nux-pulse-production.up.railway.app/mcp com X-API-Key.

@@ -33,5 +33,24 @@ class ManualConversion(Base, TimestampMixin):
 
     created_by_id: Mapped[int | None] = mapped_column(ForeignKey("team_members.id", ondelete="SET NULL"))
 
+    # ── Integracao Trackcore (e potencialmente outros sistemas externos) ──────
+    # external_event_id e o id do evento no sistema de origem; usado pra
+    # idempotencia (UNIQUE). Se vier de Trackcore, e o uuid do Event ou
+    # Conversation. Manuais via UI deixam null.
+    external_event_id: Mapped[str | None] = mapped_column(String(64), unique=True)
+    # 'manual' (UI) | 'trackcore' | outros futuros (shopify, etc)
+    attribution_source: Mapped[str] = mapped_column(String(40), default="manual", server_default="manual", index=True)
+
+    # Atribuicao por UTM (de Event do Trackcore)
+    utm_source: Mapped[str | None] = mapped_column(String(120))
+    utm_medium: Mapped[str | None] = mapped_column(String(120))
+    utm_campaign: Mapped[str | None] = mapped_column(String(200), index=True)
+    utm_content: Mapped[str | None] = mapped_column(String(200))
+    utm_term: Mapped[str | None] = mapped_column(String(200))
+
+    # Atribuicao Meta direta (de Conversation do Trackcore — click-to-WhatsApp)
+    meta_ad_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    meta_ad_name: Mapped[str | None] = mapped_column(String(200))
+
     client = relationship("Client")
     created_by = relationship("TeamMember", foreign_keys=[created_by_id])

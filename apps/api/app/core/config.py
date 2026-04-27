@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Secret compartilhado com o cron proxy (Vercel). Obrigatório em produção.
     CRON_SECRET: str | None = None
 
+    # Secret compartilhado com o Trackcore (sistema externo de tracking server-side).
+    # Trackcore envia X-Trackcore-Secret nos webhooks de evento.
+    TRACKCORE_INTEGRATION_SECRET: str | None = None
+
     @property
     def is_production(self) -> bool:
         return self.ENV.lower() == "production"
