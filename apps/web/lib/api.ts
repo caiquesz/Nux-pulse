@@ -669,3 +669,61 @@ export type NicheComparison = {
 
 export const nicheComparison = (code: string, days = 30) =>
   get<NicheComparison>(`/api/portfolio/niches/${code}/comparison?days=${days}`);
+
+// ─── Portfolio by-niche ──────────────────────────────────────────────────
+
+export type NicheAggregateRow = {
+  code: string | null;
+  name: string;
+  n_clients: number;
+  client_slugs: string[];
+  spend: number;
+  revenue: number;
+  roas: number | null;
+  avg_score: number | null;
+  daily_series: DailyPoint[];
+};
+
+export type PortfolioByNiche = {
+  period: { since: string; until: string; label: PeriodKey; days: number };
+  totals: {
+    n_clients: number;
+    n_niches: number;
+    spend: number;
+    revenue: number;
+    roas: number | null;
+    max_spend: number;
+    max_revenue: number;
+    daily_series: DailyPoint[];
+  };
+  niches: NicheAggregateRow[];
+};
+
+export const portfolioByNiche = (opts: PortfolioOverviewOpts = {}) => {
+  const q = new URLSearchParams();
+  if (opts.period) q.set("period", opts.period);
+  if (opts.since) q.set("since", opts.since);
+  if (opts.until) q.set("until", opts.until);
+  const qs = q.toString();
+  return get<PortfolioByNiche>(`/api/portfolio/by-niche${qs ? `?${qs}` : ""}`);
+};
+
+// ─── Portfolio by-category ────────────────────────────────────────────────
+
+export type CategoryRow = {
+  code: string;
+  name: string;
+  weight: number;
+  description: string | null;
+  avg_overall: number | null;
+  n_clients_scored: number;
+  by_niche: Record<string, number>;
+};
+
+export type PortfolioByCategory = {
+  categories: CategoryRow[];
+  niches: { code: string; name: string; n_clients: number }[];
+};
+
+export const portfolioByCategory = () =>
+  get<PortfolioByCategory>("/api/portfolio/by-category");

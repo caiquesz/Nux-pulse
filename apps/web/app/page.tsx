@@ -3,14 +3,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 
+import { CategoryHeatmap } from "@/components/CategoryHeatmap";
 import { ClientRow } from "@/components/ClientRow";
+import { NicheRanking } from "@/components/NicheRanking";
 import { Sparkline } from "@/components/primitives/Sparkline";
+import { Tabs, type TabItem } from "@/components/Tabs";
 import { TierBadge } from "@/components/TierBadge";
 import { TimePeriodSelector } from "@/components/TimePeriodSelector";
 import {
-  createClient, listNiches, portfolioOverview,
+  createClient, listNiches, portfolioByCategory, portfolioByNiche, portfolioOverview,
   type ClientCreatePayload, type PeriodKey, type Tier,
 } from "@/lib/api";
+
+type ViewKey = "clientes" | "nichos" | "categorias";
+const VALID_VIEWS: ViewKey[] = ["clientes", "nichos", "categorias"];
 
 const COLOR_PRESETS = ["#8A5A3B", "#2B6A4F", "#B5454B", "#3B5A8A", "#6B4A8A", "#6F6B68"];
 const VALID_PERIODS: PeriodKey[] = ["7d", "30d", "90d", "mtd", "ytd"];
@@ -54,17 +60,39 @@ function CommandCenter() {
   const periodParam = (params?.get("period") ?? "30d") as PeriodKey;
   const period: PeriodKey = VALID_PERIODS.includes(periodParam) ? periodParam : "30d";
 
+  const viewParam = (params?.get("view") ?? "clientes") as ViewKey;
+  const view: ViewKey = VALID_VIEWS.includes(viewParam) ? viewParam : "clientes";
+
   const overviewQ = useQuery({
     queryKey: ["portfolio-overview", period],
     queryFn: () => portfolioOverview({ period }),
   });
+  const byNicheQ = useQuery({
+    queryKey: ["portfolio-by-niche", period],
+    queryFn: () => portfolioByNiche({ period }),
+    enabled: view === "nichos",
+  });
+  const byCatQ = useQuery({
+    queryKey: ["portfolio-by-category"],
+    queryFn: portfolioByCategory,
+    enabled: view === "categorias",
+  });
   const nichesQ = useQuery({ queryKey: ["niches"], queryFn: listNiches });
 
-  function setPeriod(p: PeriodKey) {
+  function updateParams(updates: Record<string, string | null>) {
     const sp = new URLSearchParams(params?.toString() ?? "");
-    if (p === "30d") sp.delete("period"); else sp.set("period", p);
+    for (const [k, v] of Object.entries(updates)) {
+      if (v === null) sp.delete(k); else sp.set(k, v);
+    }
     const qs = sp.toString();
     router.replace(`/${qs ? `?${qs}` : ""}`, { scroll: false });
+  }
+
+  function setPeriod(p: PeriodKey) {
+    updateParams({ period: p === "30d" ? null : p });
+  }
+  function setView(v: ViewKey) {
+    updateParams({ view: v === "clientes" ? null : v });
   }
 
   const [showForm, setShowForm] = useState(false);
@@ -317,22 +345,65 @@ function CommandCenter() {
           </section>
         )}
 
-        {/* LIST DE CLIENTES */}
-        {overviewQ.isLoading && <SkeletonList />}
-        {data && data.clients.length === 0 && !showForm && (
-          <div className="card" style={{ padding: 32, textAlign: "center" }}>
-            <p style={{ color: "var(--ink-3)", fontSize: 14, marginBottom: 16 }}>
-              Nenhum cliente cadastrado ainda.
-            </p>
-            <button className="btn" onClick={() => setShowForm(true)}>+ Criar primeiro cliente</button>
+        {/* TABS — clientes / nichos / categorias */}
+        {data && (
+          <div style={{ marginBottom: 16 }}>
+            <Tabs<ViewKey>
+              value={view}
+              onChange={setView}
+              items={[
+                { key: "clientes", label: "Clientes", count: data.kpis.active_clients },
+                { key: "nichos", label: "Por nicho", count: Object.keys(data.tier_breakdown).filter((k) => k !== "none").length },
+                { key: "categorias", label: "Por categoria", hint: "Score por categoria × nicho" },
+              ] as TabItem<ViewKey>[]}
+            />
           </div>
         )}
-        {data && data.clients.length > 0 && (
-          <section style={{ display: "grid", gap: 8 }}>
-            {sortedClients.map((c) => (
-              <ClientRow key={c.slug} row={c} />
-            ))}
-          </section>
+
+        {/* TAB CONTENT */}
+        {view === "clientes" && (
+          <>
+            {overviewQ.isLoading && <SkeletonList />}
+            {data && data.clients.length === 0 && !showForm && (
+              <div className="card" style={{ padding: 32, textAlign: "center" }}>
+                <p style={{ color: "var(--ink-3)", fontSize: 14, marginBottom: 16 }}>
+                  Nenhum cliente cadastrado ainda.
+                </p>
+                <button className="btn" onClick={() => setShowForm(true)}>+ Criar primeiro cliente</button>
+              </div>
+            )}
+            {data && data.clients.length > 0 && (
+              <section style={{ display: "grid", gap: 8 }}>
+                {sortedClients.map((c) => (
+                  <ClientRow key={c.slug} row={c} />
+                ))}
+              </section>
+            )}
+          </>
+        )}
+
+        {view === "nichos" && (
+          <>
+            {byNicheQ.isLoading && <SkeletonList />}
+            {byNicheQ.data && <NicheRanking data={byNicheQ.data} />}
+            {byNicheQ.isError && (
+              <div className="card" style={{ padding: 16, color: "var(--neg)" }}>
+                Erro: {(byNicheQ.error as Error).message}
+              </div>
+            )}
+          </>
+        )}
+
+        {view === "categorias" && (
+          <>
+            {byCatQ.isLoading && <SkeletonList />}
+            {byCatQ.data && <CategoryHeatmap data={byCatQ.data} />}
+            {byCatQ.isError && (
+              <div className="card" style={{ padding: 16, color: "var(--neg)" }}>
+                Erro: {(byCatQ.error as Error).message}
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>

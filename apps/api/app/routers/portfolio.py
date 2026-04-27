@@ -302,6 +302,194 @@ def portfolio_overview(
     }
 
 
+@router.get("/portfolio/by-niche")
+def portfolio_by_niche(
+    period: str | None = None,
+    since: str | None = None,
+    until: str | None = None,
+    db: Session = Depends(get_db),
+):
+    """Agrega metricas do portfolio por nicho.
+
+    Retorna lista ordenada por spend total desc:
+      { code, name, n_clients, spend, revenue, roas, avg_score, daily_series }
+    Plus totais 'all' agregados de todo o portfolio (linha de referencia).
+    """
+    p_since, p_until, p_label = _resolve_period(period, since, until)
+
+    # carrega niches + clientes ativos
+    niches = db.query(Niche).all()
+    niche_map = {n.code: n for n in niches}
+    clients = db.query(Client).filter(Client.is_active.is_(True)).all()
+
+    # group clients by niche_code
+    by_niche: dict[str | None, list[Client]] = {}
+    for c in clients:
+        by_niche.setdefault(c.niche_code, []).append(c)
+
+    rows = []
+    portfolio_spend = 0.0
+    portfolio_revenue = 0.0
+    portfolio_daily: dict[str, dict[str, float]] = {}
+
+    for niche_code, niche_clients in by_niche.items():
+        spend_total = 0.0
+        revenue_total = 0.0
+        scores: list[int] = []
+        agg_daily: dict[str, dict[str, float]] = {}
+
+        for c in niche_clients:
+            m = _client_window_metrics(db, c.id, p_since, p_until)
+            spend_total += m["spend"]
+            revenue_total += m["revenue"]
+            if c.score_current is not None:
+                scores.append(c.score_current)
+
+            daily = _client_daily_series(db, c.id, p_since, p_until)
+            for d in daily:
+                agg = agg_daily.setdefault(d["date"], {"spend": 0.0, "revenue": 0.0})
+                agg["spend"] += d["spend"]
+                agg["revenue"] += d["revenue"]
+                # acumula no portfolio total tambem
+                ptotal = portfolio_daily.setdefault(d["date"], {"spend": 0.0, "revenue": 0.0})
+                ptotal["spend"] += d["spend"]
+                ptotal["revenue"] += d["revenue"]
+
+        portfolio_spend += spend_total
+        portfolio_revenue += revenue_total
+
+        niche_obj = niche_map.get(niche_code) if niche_code else None
+        rows.append({
+            "code": niche_code,
+            "name": niche_obj.name if niche_obj else (niche_code or "Sem nicho"),
+            "n_clients": len(niche_clients),
+            "client_slugs": [c.slug for c in niche_clients],
+            "spend": round(spend_total, 2),
+            "revenue": round(revenue_total, 2),
+            "roas": round(revenue_total / spend_total, 2) if spend_total > 0 else None,
+            "avg_score": round(sum(scores) / len(scores)) if scores else None,
+            "daily_series": [
+                {
+                    "date": d,
+                    "spend": round(agg_daily[d]["spend"], 2),
+                    "revenue": round(agg_daily[d]["revenue"], 2),
+                }
+                for d in sorted(agg_daily.keys())
+            ],
+        })
+
+    # ordena por spend desc
+    rows.sort(key=lambda r: r["spend"], reverse=True)
+
+    # max value pra alimentar mini-bars no UI
+    max_spend = max((r["spend"] for r in rows), default=0)
+    max_revenue = max((r["revenue"] for r in rows), default=0)
+
+    portfolio_daily_sorted = [
+        {
+            "date": d,
+            "spend": round(portfolio_daily[d]["spend"], 2),
+            "revenue": round(portfolio_daily[d]["revenue"], 2),
+        }
+        for d in sorted(portfolio_daily.keys())
+    ]
+
+    return {
+        "period": {
+            "since": p_since.isoformat(),
+            "until": p_until.isoformat(),
+            "label": p_label,
+            "days": (p_until - p_since).days + 1,
+        },
+        "totals": {
+            "n_clients": len(clients),
+            "n_niches": len(rows),
+            "spend": round(portfolio_spend, 2),
+            "revenue": round(portfolio_revenue, 2),
+            "roas": round(portfolio_revenue / portfolio_spend, 2) if portfolio_spend > 0 else None,
+            "max_spend": max_spend,
+            "max_revenue": max_revenue,
+            "daily_series": portfolio_daily_sorted,
+        },
+        "niches": rows,
+    }
+
+
+@router.get("/portfolio/by-category")
+def portfolio_by_category(
+    db: Session = Depends(get_db),
+):
+    """Agrega scores por categoria de servico, com breakdown por nicho.
+
+    Le o snapshot mais recente de client_category_scores pra cada cliente.
+    Calcula:
+      - avg_overall por categoria: media simples entre todos os clientes ativos
+      - by_niche: dict[niche_code, avg_score] pra cada categoria
+
+    Util pra heatmap nicho x categoria + ranking de pontos fortes/fracos.
+    """
+    from app.models.scoring import ClientCategoryScore, ServiceCategory
+
+    cats = db.query(ServiceCategory).order_by(ServiceCategory.id).all()
+    clients = db.query(Client).filter(Client.is_active.is_(True)).all()
+    if not cats or not clients:
+        return {"categories": [], "niches": []}
+
+    # collect last score per (client_id, category_id)
+    # e mapear client_id -> niche_code
+    client_niches = {c.id: c.niche_code for c in clients}
+    used_niches = sorted({nc for nc in client_niches.values() if nc})
+
+    # Pra cada categoria: percorre clientes; pega ultimo score; agrega
+    categories_payload = []
+    for cat in cats:
+        all_scores: list[int] = []
+        scores_by_niche: dict[str, list[int]] = {}
+
+        for c in clients:
+            last = (
+                db.query(ClientCategoryScore)
+                .filter(
+                    ClientCategoryScore.client_id == c.id,
+                    ClientCategoryScore.category_id == cat.id,
+                )
+                .order_by(ClientCategoryScore.period_start.desc())
+                .first()
+            )
+            if not last:
+                continue
+            all_scores.append(last.score)
+            if c.niche_code:
+                scores_by_niche.setdefault(c.niche_code, []).append(last.score)
+
+        avg_overall = round(sum(all_scores) / len(all_scores)) if all_scores else None
+        by_niche = {
+            nc: round(sum(s) / len(s)) for nc, s in scores_by_niche.items()
+        }
+
+        categories_payload.append({
+            "code": cat.code,
+            "name": cat.name,
+            "weight": float(cat.weight),
+            "description": cat.description,
+            "avg_overall": avg_overall,
+            "n_clients_scored": len(all_scores),
+            "by_niche": by_niche,
+        })
+
+    # build niches list with names pra UI
+    niche_rows = db.query(Niche).filter(Niche.code.in_(used_niches)).all() if used_niches else []
+    niches_payload = [
+        {"code": n.code, "name": n.name, "n_clients": sum(1 for c in clients if c.niche_code == n.code)}
+        for n in niche_rows
+    ]
+
+    return {
+        "categories": categories_payload,
+        "niches": niches_payload,
+    }
+
+
 @router.post("/cron/score", status_code=200)
 def run_scoring_cron(
     period_start: str | None = None,
