@@ -5,7 +5,7 @@ from app.core.crypto import encrypt
 from app.core.db import get_db
 from app.models.client import Client
 from app.models.connection import AccountConnection, Platform
-from app.schemas.client import ClientCreate, ClientRead
+from app.schemas.client import ClientCreate, ClientRead, ClientUpdate
 from app.schemas.connection import ConnectionRead, GoogleConnectionCreate, MetaConnectionCreate
 
 router = APIRouter(prefix="/api/clients", tags=["clients"])
@@ -33,6 +33,17 @@ def get_client(slug: str, db: Session = Depends(get_db)):
     c = db.query(Client).filter(Client.slug == slug).first()
     if not c:
         raise HTTPException(404, "Client not found")
+    return c
+
+
+@router.patch("/{slug}", response_model=ClientRead)
+def update_client(slug: str, payload: ClientUpdate, db: Session = Depends(get_db)):
+    c = db.query(Client).filter(Client.slug == slug).first()
+    if not c:
+        raise HTTPException(404, "Client not found")
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(c, field, value)
+    db.add(c); db.commit(); db.refresh(c)
     return c
 
 
