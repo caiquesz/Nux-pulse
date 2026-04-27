@@ -7,10 +7,13 @@ import { useQuery } from "@tanstack/react-query";
 import { metaAlerts } from "@/lib/api";
 import { Icon, type IconName } from "./icons/Icon";
 
-type NavItem = { id: string; label: string; icon: IconName };
+type NavItem = { id: string; label: string; icon: IconName; href?: string };
 type NavGroup = { group: string; items: NavItem[] };
 
 const NAV: NavGroup[] = [
+  { group: "NUX", items: [
+    { id: "__home", label: "Command Center", icon: "overview", href: "/" },
+  ]},
   { group: "Dashboards", items: [
     { id: "overview", label: "Visão geral", icon: "overview" },
     { id: "meta",     label: "Meta Ads",    icon: "meta" },
@@ -126,12 +129,15 @@ export function Sidebar({ slug, collapsed, onToggle }: Props) {
           <div key={g.group} className="sb-group">
             {!collapsed && <div className="sb-group-label">{g.group}</div>}
             {g.items.map((it) => {
-              const active = current === it.id;
+              // Items com `href` explicito (ex: Command Center -> /) escapam do
+              // prefixo de slug. Default e prefixar com /c/{slug}/{id}.
+              const targetHref = it.href ?? `/c/${slug}/${it.id}`;
+              const active = it.href ? pathname === it.href : current === it.id;
               const badge = badgeFor(it.id);
               return (
                 <Link
                   key={it.id}
-                  href={`/c/${slug}/${it.id}`}
+                  href={targetHref}
                   className={`sb-item ${active ? "active" : ""}`}
                   title={collapsed ? it.label : undefined}
                 >
