@@ -122,6 +122,8 @@ export type ClientCreatePayload = {
   monthly_budget?: number | null;
   monthly_revenue_goal?: number | null;
   logo_url?: string | null;
+  niche_code?: string | null;
+  segment?: string | null;
 };
 export const createClient = (body: ClientCreatePayload) =>
   post<ClientRead>("/api/clients", body);
@@ -531,3 +533,48 @@ export const updateManualConversion = (id: number, body: Partial<ManualConversio
 
 export const deleteManualConversion = (id: number) =>
   del(`/api/manual-conversions/${id}`);
+
+// ═════════════════════════════════════════════════════════════════════════
+//  COMMAND CENTER — portfolio
+// ═════════════════════════════════════════════════════════════════════════
+
+export type Tier = "S" | "A" | "B" | "C" | "D";
+
+export type ClientPortfolioRow = {
+  slug: string;
+  name: string;
+  niche_code: string | null;
+  accent_color: string | null;
+  tier: Tier | null;
+  score: number | null;
+  delta_vs_prev: number | null;
+  score_updated_at: string | null;
+  monthly_budget: number | null;
+  monthly_revenue_goal: number | null;
+  mtd_spend: number;
+  mtd_revenue: number;
+  last_sync_date: string | null;
+  alerts: { neg: number; warn: number; info: number; pos: number };
+};
+
+export type PortfolioOverview = {
+  as_of: string;
+  month_start: string;
+  kpis: {
+    active_clients: number;
+    portfolio_spend_mtd: number;
+    portfolio_revenue_mtd: number;
+    portfolio_roas_mtd: number;
+    pct_sa: number;
+    critical_alerts: number;
+    avg_delta_7d: number | null;
+  };
+  tier_breakdown: Record<"S" | "A" | "B" | "C" | "D" | "none", number>;
+  clients: ClientPortfolioRow[];
+};
+
+export const portfolioOverview = () => get<PortfolioOverview>("/api/portfolio/overview");
+
+// ─── niches ──────────────────────────────────────────────────────────────
+export type Niche = { code: string; name: string; created_at: string };
+export const listNiches = () => get<Niche[]>("/api/niches");
