@@ -1,5 +1,6 @@
+from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import String, Numeric, Boolean
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, SmallInteger, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
@@ -17,5 +18,12 @@ class Client(Base, TimestampMixin):
     monthly_budget: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     monthly_revenue_goal: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    niche_code: Mapped[str | None] = mapped_column(String(40), ForeignKey("niches.code", ondelete="SET NULL"), index=True)
+    segment: Mapped[str | None] = mapped_column(String(40))
+    onboarded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    tier_current: Mapped[str | None] = mapped_column(String(1), index=True)
+    score_current: Mapped[int | None] = mapped_column(SmallInteger)
+    score_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     connections = relationship("AccountConnection", back_populates="client", cascade="all, delete-orphan")

@@ -7,7 +7,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.auth import require_api_key
 from app.core.config import settings
 from app.mcp_server import mcp
-from app.routers import clients, conversions, health, insights, project, sync
+from app.routers import clients, conversions, health, insights, niches, project, sync
 
 # ─── MCP sub-app (precisa ser criado antes do FastAPI principal pra
 # propagar o `lifespan` — fastmcp usa task groups que só inicializam
@@ -69,6 +69,7 @@ def _unauthorized_json(detail: str):
 app.include_router(health.router)
 _protected = [Depends(require_api_key)]
 app.include_router(clients.router, dependencies=_protected)
+app.include_router(niches.router, dependencies=_protected)
 app.include_router(sync.router, dependencies=_protected)
 app.include_router(insights.router, dependencies=_protected)
 app.include_router(project.router, dependencies=_protected)
