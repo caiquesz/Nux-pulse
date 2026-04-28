@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { seriesToPath, seriesToBars, formatShort } from "@/lib/chart-utils";
 
 type Props = {
@@ -42,6 +42,8 @@ export function BigChart({
   const wrap = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(600);
   const [hover, setHover] = useState<{ idx: number; x: number } | null>(null);
+  const fillGradId = `bigchart-fill-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const lineGradId = `bigchart-line-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
 
   useEffect(() => {
     if (!wrap.current) return;
@@ -100,6 +102,21 @@ export function BigChart({
   return (
     <div ref={wrap} style={{ position: "relative", height }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
       <svg width={w} height={height} style={{ display: "block" }}>
+        <defs>
+          {/* Fill gradient: line color at top (32% opacity) → transparent at bottom.
+              Plus a subtle horizontal sheen for the "fluid" Cryptox-style fill. */}
+          <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"  stopColor={lineColor} stopOpacity="0.36" />
+            <stop offset="50%" stopColor={lineColor} stopOpacity="0.12" />
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
+          </linearGradient>
+          {/* Line gradient: brighter on top of arc, slightly dimmer at sides. */}
+          <linearGradient id={lineGradId} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%"   stopColor={lineColor} stopOpacity="0.7" />
+            <stop offset="50%"  stopColor={lineColor} stopOpacity="1" />
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0.7" />
+          </linearGradient>
+        </defs>
         {/* Grid lines horizontais */}
         {gridLines.map((y, i) => (
           <line key={i} x1={padL} x2={w - padR} y1={y} y2={y} stroke={gridColor} strokeWidth={1} />
@@ -142,11 +159,11 @@ export function BigChart({
           ))
         ) : (
           <>
-            {style !== "line" && <path d={area} fill={fillColor} />}
+            {style !== "line" && <path d={area} fill={`url(#${fillGradId})`} />}
             {cmpPath && (
-              <path d={cmpPath.line} fill="none" stroke={compareColor} strokeWidth={1.5} strokeDasharray="5 4" />
+              <path d={cmpPath.line} fill="none" stroke={compareColor} strokeWidth={1.5} strokeDasharray="5 4" strokeLinecap="round" />
             )}
-            <path d={line} fill="none" stroke={lineColor} strokeWidth={1.75} />
+            <path d={line} fill="none" stroke={`url(#${lineGradId})`} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </>
         )}
 

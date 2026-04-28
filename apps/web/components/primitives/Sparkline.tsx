@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { seriesToPath, seriesToBars } from "@/lib/chart-utils";
 
 type Props = {
@@ -24,6 +24,7 @@ export function Sparkline({
   const [w, setW] = useState(120);
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ idx: number; x: number } | null>(null);
+  const gradId = `spark-fill-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
 
   useEffect(() => {
     if (!ref.current) return;
@@ -65,7 +66,16 @@ export function Sparkline({
       onMouseMove={onMove}
       onMouseLeave={() => setHover(null)}
     >
-      <svg width={w} height={height} style={{ display: "block" }}>
+      <svg width={w} height={height} style={{ display: "block", overflow: "visible" }}>
+        <defs>
+          {/* Vertical gradient: chart-line color at top (28% opacity) → transparent at bottom.
+              Creates the "fluid" filled-area look like Cryptox. */}
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"  stopColor="var(--chart-line)" stopOpacity="0.32" />
+            <stop offset="60%" stopColor="var(--chart-line)" stopOpacity="0.08" />
+            <stop offset="100%" stopColor="var(--chart-line)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
         {style === "bar" && bars
           ? bars.map((b, i) => (
               <rect key={i} x={b.x} y={b.y} width={b.w} height={b.h}
@@ -73,9 +83,9 @@ export function Sparkline({
             ))
           : (
             <>
-              {style !== "line" && <path d={area} fill="var(--chart-fill)" />}
+              {style !== "line" && <path d={area} fill={`url(#${gradId})`} />}
               {cmp && <path d={cmp.line} fill="none" stroke="var(--chart-line-2)" strokeWidth={1.25} strokeDasharray="3 3" />}
-              <path d={line} fill="none" stroke="var(--chart-line)" strokeWidth={1.5} />
+              <path d={line} fill="none" stroke="var(--chart-line)" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" />
             </>
           )}
 

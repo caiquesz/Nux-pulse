@@ -146,7 +146,10 @@ function CommandCenter() {
   ) ?? [];
 
   return (
-    <main style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)" }}>
+    <main
+      className="stage-glow"
+      style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)" }}
+    >
       <div style={{ maxWidth: 1320, margin: "0 auto", padding: "32px 24px 56px" }}>
         {/* HEADER */}
         <header style={{

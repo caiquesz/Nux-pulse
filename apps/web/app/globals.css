@@ -503,26 +503,48 @@ button {
   align-items: center;
   gap: 8px;
   padding: 10px 18px;
-  background: var(--accent);
-  color: var(--accent-ink);
+  background:
+    linear-gradient(180deg,
+      oklch(0.78 0.22 45) 0%,
+      oklch(0.65 0.20 50) 100%);
+  color: #FFFFFF;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.2px;
   border-radius: 999px;
   min-height: 36px;
+  position: relative;
+  /* gloss layer at top + color glow */
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.28),
+    inset 0 -1px 0 rgba(0,0,0,0.18),
+    0 4px 16px -2px oklch(0.72 0.20 50 / 0.45),
+    0 1px 0 rgba(0,0,0,0.10);
   transition:
-    background 160ms ease,
-    box-shadow 200ms ease,
-    transform 120ms ease;
+    transform 120ms ease,
+    box-shadow 240ms ease,
+    background 160ms ease;
 }
 .btn:hover {
-  background: var(--accent-hi, var(--accent));
-  box-shadow: 0 0 0 1px rgba(255,107,53,0.25), 0 8px 24px -8px rgba(255,107,53,0.4);
+  background:
+    linear-gradient(180deg,
+      oklch(0.82 0.22 45) 0%,
+      oklch(0.70 0.21 50) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.35),
+    inset 0 -1px 0 rgba(0,0,0,0.16),
+    0 0 0 1px oklch(0.78 0.22 45 / 0.4),
+    0 8px 32px -4px oklch(0.72 0.20 50 / 0.6),
+    0 1px 0 rgba(0,0,0,0.10);
 }
 .btn:active { transform: translateY(1px); }
 .btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px oklch(0.78 0.22 45 / 0.6),
+    inset 0 1px 0 rgba(255,255,255,0.28),
+    0 4px 16px -2px oklch(0.72 0.20 50 / 0.45);
 }
 .btn.ghost {
   background: transparent;
@@ -624,22 +646,44 @@ button {
 @media (max-width: 1100px) {
   .grid-kpi { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 }
-/* ── CARD — glossy dark surface with top-light hairline (Cryptox-inspired) ──
-   `linear-gradient` simulates light hitting top of card; `border-top` 1px hairline
-   with --border-hi catches the light. Hover lifts subtly (no scale, just border). */
+/* ── CARD — glassmorphism (Cryptox-inspired multi-layer) ──
+   Layers from bottom to top:
+   1. Translucent gradient surface (slightly lit at top)
+   2. backdrop-filter blur+saturate to pick up ambient color from .stage-glow
+   3. Inner highlight (top hairline) via box-shadow inset
+   4. Outer drop shadow + subtle rim
+   The subtle rim and inner highlight are what make it read as "glass" not "card". */
 .card {
   background:
-    linear-gradient(180deg, var(--surface-hi, var(--surface)) 0%, var(--surface) 70%);
+    linear-gradient(180deg,
+      color-mix(in oklch, var(--surface-hi, var(--surface)) 92%, transparent) 0%,
+      color-mix(in oklch, var(--surface) 80%, transparent) 100%);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
   border: 1px solid var(--border);
-  border-top-color: var(--border-hi, var(--border-2));
-  border-radius: 16px;
+  border-top-color: var(--border-hi, rgba(255,255,255,0.14));
+  border-radius: 18px;
   padding: var(--card-pad);
   position: relative;
-  box-shadow: var(--card-shadow);
-  transition: border-color 160ms ease, transform 160ms ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 1px 0 rgba(255,255,255,0.02),
+    0 24px 48px -16px rgba(0,0,0,0.6),
+    0 8px 16px -8px rgba(0,0,0,0.3);
+  transition:
+    border-color 200ms ease,
+    transform 200ms ease,
+    box-shadow 200ms ease;
 }
-.card:hover { border-color: var(--border-2); }
-.card:hover { border-top-color: var(--border-hi, var(--border-2)); }
+.card:hover {
+  border-color: rgba(255,255,255,0.10);
+  border-top-color: rgba(255,255,255,0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.10),
+    0 1px 0 rgba(255,255,255,0.03),
+    0 32px 64px -16px rgba(0,0,0,0.7),
+    0 12px 24px -8px rgba(0,0,0,0.4);
+}
 .card.tight { padding: 0; overflow: hidden; }
 .card-head {
   display: flex;
@@ -917,9 +961,70 @@ button {
   z-index: 1;
 }
 
-/* ── Hero glow — utility for stage zones (Command Center hero, empty states).
-   Drop into any container that needs a Cryptox-style ambient orange wash.
-   Use as ::before with `position: relative` parent and `overflow: hidden`. */
+/* ── Stage glow — the Cryptox-style atmospheric backdrop ──
+   Big concentric radial light source emanating from top-center.
+   Multiple layered radials at varying intensities create depth and "rings".
+   Use on a top-level container (page wrapper) that has `position: relative` +
+   `overflow: hidden` (or just clipping at the edges). The glow lives behind
+   everything (z-index: -1) so cards/text sit on top with `backdrop-filter`
+   picking up some of the orange ambient. */
+.stage-glow {
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+}
+.stage-glow::before {
+  content: "";
+  position: absolute;
+  top: -10%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140%;
+  max-width: 1800px;
+  height: 700px;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    /* Outer ring — soft warm wash */
+    radial-gradient(closest-side at 50% 25%,
+      oklch(0.62 0.20 35 / 0.18) 0%,
+      transparent 70%),
+    /* Mid ring — vivid orange */
+    radial-gradient(closest-side at 50% 18%,
+      oklch(0.72 0.22 45 / 0.30) 0%,
+      transparent 55%),
+    /* Inner core — bright */
+    radial-gradient(closest-side at 50% 12%,
+      oklch(0.82 0.22 50 / 0.38) 0%,
+      transparent 35%);
+  filter: blur(12px) saturate(120%);
+}
+/* Concentric arcs that read as "rings of light" — sit closer to the surface */
+.stage-glow::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1200px;
+  height: 600px;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 50% 30% at 50% 5%,
+      transparent 0%,
+      transparent 35%,
+      oklch(0.72 0.22 45 / 0.10) 38%,
+      transparent 42%),
+    radial-gradient(ellipse 60% 35% at 50% 5%,
+      transparent 0%,
+      transparent 50%,
+      oklch(0.72 0.22 45 / 0.07) 53%,
+      transparent 57%);
+  opacity: 0.85;
+}
+
+/* ── Hero glow (smaller version for empty states / focal cards) ── */
 .hero-glow {
   position: relative;
   isolation: isolate;
@@ -935,6 +1040,53 @@ button {
   pointer-events: none;
   z-index: -1;
   filter: blur(8px);
+}
+
+/* ── Float pill — small floating badge with icon (Bitora/Coinza/etc style) ──
+   Use for floating context labels or decorative chips on the stage.
+   Translucent pill with subtle gradient + tiny icon dot. */
+.float-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 8px;
+  background:
+    linear-gradient(180deg,
+      rgba(40,40,40,0.6) 0%,
+      rgba(20,20,20,0.4) 100%);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-top-color: rgba(255,255,255,0.12);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 8px 16px -8px rgba(0,0,0,0.4);
+  transition: border-color 200ms ease, color 200ms ease;
+}
+.float-pill:hover {
+  border-top-color: rgba(255,255,255,0.18);
+  color: var(--ink);
+}
+.float-pill .dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, oklch(0.78 0.22 45), oklch(0.55 0.18 50));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.25),
+    0 0 8px oklch(0.72 0.22 45 / 0.5);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: white;
+  margin: 0;
+  flex-shrink: 0;
 }
 
 /* ── Extra chart palette — para gráficos multi-série ── */
