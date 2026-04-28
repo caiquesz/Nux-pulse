@@ -961,13 +961,10 @@ button {
   z-index: 1;
 }
 
-/* ── Stage glow — the Cryptox-style atmospheric backdrop ──
-   Big concentric radial light source emanating from top-center.
-   Multiple layered radials at varying intensities create depth and "rings".
-   Use on a top-level container (page wrapper) that has `position: relative` +
-   `overflow: hidden` (or just clipping at the edges). The glow lives behind
-   everything (z-index: -1) so cards/text sit on top with `backdrop-filter`
-   picking up some of the orange ambient. */
+/* ── Stage glow — diffuse atmospheric light source ──
+   One single soft radial source emanating from above. Heavy blur (80px+) and
+   continuous opacity fade make it read as ambient light, not a stamped decal.
+   No hard ring boundaries. The light extends downward and fades out organically. */
 .stage-glow {
   position: relative;
   isolation: isolate;
@@ -976,52 +973,43 @@ button {
 .stage-glow::before {
   content: "";
   position: absolute;
-  top: -10%;
+  top: -200px;
   left: 50%;
   transform: translateX(-50%);
-  width: 140%;
-  max-width: 1800px;
-  height: 700px;
+  width: 100%;
+  max-width: 1600px;
+  height: 900px;
   pointer-events: none;
   z-index: -1;
-  background:
-    /* Outer ring — soft warm wash */
-    radial-gradient(closest-side at 50% 25%,
-      oklch(0.62 0.20 35 / 0.18) 0%,
-      transparent 70%),
-    /* Mid ring — vivid orange */
-    radial-gradient(closest-side at 50% 18%,
-      oklch(0.72 0.22 45 / 0.30) 0%,
-      transparent 55%),
-    /* Inner core — bright */
-    radial-gradient(closest-side at 50% 12%,
-      oklch(0.82 0.22 50 / 0.38) 0%,
-      transparent 35%);
-  filter: blur(12px) saturate(120%);
+  /* Single soft source — no concentric rings, just a smooth fade */
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 30%,
+    oklch(0.70 0.20 45 / 0.22) 0%,
+    oklch(0.62 0.18 38 / 0.10) 35%,
+    transparent 75%
+  );
+  filter: blur(80px) saturate(110%);
+  opacity: 0.9;
 }
-/* Concentric arcs that read as "rings of light" — sit closer to the surface */
+/* Subtle secondary highlight — creates depth without visible boundary */
 .stage-glow::after {
   content: "";
   position: absolute;
-  top: 0;
+  top: -100px;
   left: 50%;
   transform: translateX(-50%);
-  width: 1200px;
-  height: 600px;
+  width: 60%;
+  max-width: 900px;
+  height: 500px;
   pointer-events: none;
   z-index: -1;
-  background:
-    radial-gradient(ellipse 50% 30% at 50% 5%,
-      transparent 0%,
-      transparent 35%,
-      oklch(0.72 0.22 45 / 0.10) 38%,
-      transparent 42%),
-    radial-gradient(ellipse 60% 35% at 50% 5%,
-      transparent 0%,
-      transparent 50%,
-      oklch(0.72 0.22 45 / 0.07) 53%,
-      transparent 57%);
-  opacity: 0.85;
+  background: radial-gradient(
+    ellipse 60% 70% at 50% 20%,
+    oklch(0.78 0.22 50 / 0.15) 0%,
+    transparent 65%
+  );
+  filter: blur(50px);
+  opacity: 0.7;
 }
 
 /* ── Hero glow (smaller version for empty states / focal cards) ── */
