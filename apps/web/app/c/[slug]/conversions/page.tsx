@@ -275,7 +275,6 @@ function TotalCard({ label, value, icon, color, isCurrency }: {
       padding: "14px 16px",
       background: "var(--surface)",
       border: "1px solid var(--border)",
-      borderLeft: `3px solid ${color}`,
       borderRadius: 10,
       position: "relative",
     }}>

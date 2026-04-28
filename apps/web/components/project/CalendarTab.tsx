@@ -285,7 +285,6 @@ export function CalendarTab({ slug }: { slug: string }) {
                   textAlign: "left", padding: "9px 12px",
                   background: "var(--surface)",
                   border: "1px solid var(--border)",
-                  borderLeft: `3px solid ${PRIORITY[t.priority].color}`,
                   borderRadius: 6, cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 10,
                   transition: "background .08s",
@@ -520,7 +519,6 @@ function DayTaskChip({ task, onClick }: { task: Task; onClick: () => void }) {
         padding: "3px 6px 3px 4px",
         background: "transparent",
         border: "none",
-        borderLeft: `2px solid ${priCfg.color}`,
         borderRadius: 2,
         cursor: "pointer", textAlign: "left", width: "100%",
         overflow: "hidden",
@@ -812,7 +810,6 @@ function DayExpandModal({
                 textAlign: "left", padding: "10px 12px",
                 background: "var(--surface)",
                 border: "1px solid var(--border)",
-                borderLeft: `3px solid ${priCfg.color}`,
                 borderRadius: 6, cursor: "pointer",
                 display: "grid", gridTemplateColumns: "54px 1fr auto", gap: 10, alignItems: "center",
               }}

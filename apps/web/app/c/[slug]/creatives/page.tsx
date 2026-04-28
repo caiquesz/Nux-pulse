@@ -50,7 +50,7 @@ export default function CreativesPage() {
       </div>
 
       {q.isError && (
-        <div className="card" style={{ padding: 16, borderLeft: "3px solid var(--neg)" }}>
+        <div className="card" style={{ padding: 16,  }}>
           Erro ao carregar criativos.
         </div>
       )}

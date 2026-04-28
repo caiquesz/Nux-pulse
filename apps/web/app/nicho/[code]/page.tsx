@@ -89,7 +89,7 @@ export default function NichoPage({ params }: { params: Promise<{ code: string }
         )}
 
         {q.isError && (
-          <div className="card" style={{ padding: 16, borderLeft: "3px solid var(--neg)" }}>
+          <div className="card" style={{ padding: 16,  }}>
             <strong>Erro carregando comparativo.</strong>
             <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>
               {(q.error as Error)?.message}
@@ -106,7 +106,7 @@ export default function NichoPage({ params }: { params: Promise<{ code: string }
         )}
 
         {data && data.clients.length === 1 && (
-          <div className="card" style={{ padding: 16, borderLeft: "3px solid var(--warn)", marginBottom: 16 }}>
+          <div className="card" style={{ padding: 16, marginBottom: 16 }}>
             Apenas 1 cliente nesse nicho. Comparativo só faz sentido com 2+ — você pode adicionar nicho a outros clientes pela home (Command Center → Editar cliente).
           </div>
         )}

@@ -38,7 +38,7 @@ export default function SyncHealthPage() {
       </div>
 
       {isError && (
-        <div className="card" style={{ padding: 16, borderLeft: "3px solid var(--neg)" }}>
+        <div className="card" style={{ padding: 16,  }}>
           Erro ao ler jobs de sincronização.
         </div>
       )}

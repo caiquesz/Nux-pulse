@@ -244,7 +244,7 @@ export function FilesTab({ slug }: { slug: string }) {
       {/* ── Estados ─────────────────────────────────────────── */}
       {filesQ.isLoading && <LoadingGrid />}
       {filesQ.isError && (
-        <div className="card" style={{ padding: 14, borderLeft: "3px solid var(--neg)" }}>
+        <div className="card" style={{ padding: 14,  }}>
           {(filesQ.error as Error)?.message}
         </div>
       )}

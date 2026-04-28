@@ -477,8 +477,7 @@ function SummaryBullet({ kind, title, body }: { kind: "pos" | "neg" | "warn" | "
   return (
     <div style={{
       padding: "14px 18px", background: "var(--surface-2)", borderRadius: 8,
-      borderLeft: `3px solid ${borderColor}`,
-    }}>
+      }}>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{title}</div>
       <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5 }}>{body}</div>
     </div>
