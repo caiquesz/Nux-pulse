@@ -14,9 +14,9 @@ import { Icon } from "@/components/icons/Icon";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import {
   listJobs,
-  metaOverview, metaCampaigns, metaDaily, metaFunnel,
+  metaOverview, metaCampaigns, metaDaily,
   triggerMetaBackfill,
-  type MetaOverview, type MetaCampaignsResponse, type MetaDailyResponse, type MetaFunnelResponse,
+  type MetaOverview, type MetaCampaignsResponse, type MetaDailyResponse,
   type RangeOpts,
 } from "@/lib/api";
 import { fmtBRL, fmtInt, fmtIntCompact, fmtPct } from "@/lib/fmt";
@@ -128,19 +128,10 @@ export function Overview() {
     enabled: !!slug && !!compareDailyOpts,
   });
 
-  // Funil — 2 queries: periodo atual + periodo de comparacao.
-  // Mesmas regras de range do compareDailyOpts.
-  const funnelQ = useQuery<MetaFunnelResponse>({
-    queryKey: ["meta", "funnel", ...queryKeyBase],
-    queryFn: () => metaFunnel(slug, rangeOpts),
-    enabled: !!slug,
-  });
-
-  const funnelCompareQ = useQuery<MetaFunnelResponse>({
-    queryKey: ["meta", "funnel-compare", slug, compareDailyOpts?.since, compareDailyOpts?.until],
-    queryFn: () => metaFunnel(slug, compareDailyOpts!),
-    enabled: !!slug && !!compareDailyOpts,
-  });
+  // Funil — stages derivadas direto do MetaOverview. 6 etapas:
+  // Investimento, Impressoes, Alcance, Mensagens, Leads, Compras.
+  // Investimento eh moeda (especial) — outras sao counts e formam o funil
+  // de conversao real. Sem chamada extra de API.
 
   const kpis = useMemo(
     () => buildKpis(overviewQ.data, dailyQ.data, compareQ.data, compareDailyQ.data),
@@ -369,15 +360,13 @@ export function Overview() {
             marginBottom: 28,
           }}>
             <MiniFunnel
-              data={funnelQ.data}
-              loading={funnelQ.isLoading}
+              stages={buildOverviewFunnelStages(overviewQ.data)}
               title="Período de análise"
               lineColor="var(--data-orange)"
               rangeLabel={formatRangeBr(overviewQ.data.since, overviewQ.data.until)}
             />
             <MiniFunnel
-              data={funnelCompareQ.data}
-              loading={funnelCompareQ.isLoading}
+              stages={buildOverviewFunnelStages(compareQ.data ?? overviewQ.data.previous_period)}
               title={customCompare?.from && customCompare?.to ? "Período personalizado" : "Período anterior"}
               lineColor="var(--data-violet)"
               rangeLabel={
@@ -882,38 +871,54 @@ function statusDot(s: string | null): "on" | "warn" | "off" {
 }
 
 /**
+ * Stage do funil derivada do MetaOverview.
+ *  - `value`: numero exibido (R$ pra Investimento, count pras outras)
+ *  - `riverValue`: numero usado pra calcular altura do rio. Pra Investimento
+ *    usamos o valor de Impressoes pra o rio comecar visualmente alinhado ao
+ *    "topo" do funil de counts. As outras stages usam o proprio value.
+ *  - `isCurrency`: marca pra renderizar formato R$ no big text.
+ */
+type FunnelStageView = {
+  key: string;
+  label: string;
+  value: number;
+  riverValue: number;
+  isCurrency?: boolean;
+};
+
+function buildOverviewFunnelStages(o: {
+  spend: number; impressions: number; reach: number;
+  messages: number; leads: number; purchases: number;
+}): FunnelStageView[] {
+  const impressions = o.impressions || 0;
+  return [
+    { key: "spend",       label: "Investimento", value: o.spend || 0,        riverValue: impressions, isCurrency: true },
+    { key: "impressions", label: "Impressões",   value: impressions,         riverValue: impressions },
+    { key: "reach",       label: "Alcance",      value: o.reach || 0,        riverValue: o.reach || 0 },
+    { key: "messages",    label: "Mensagens",    value: o.messages || 0,     riverValue: o.messages || 0 },
+    { key: "leads",       label: "Leads",        value: o.leads || 0,        riverValue: o.leads || 0 },
+    { key: "purchases",   label: "Compras",      value: o.purchases || 0,    riverValue: o.purchases || 0 },
+  ];
+}
+
+/**
  * MiniFunnel — funil de conversao com RIVER FLOWING (SVG path curvado).
- * Estilo signature: cada stage eh uma coluna, com header (label + icone),
- * % cumulativo grande no centro, valor absoluto + delta vermelho no rodape.
- * O "rio" laranja/roxo flui de uma altura proporcional ao valor da stage,
- * com cubic bezier suavizando a transicao entre stages. 3 layers de
- * opacidade pra dar profundidade (estilo referencia Cryptox/dashboards modernos).
+ * Stages renderizam em colunas com label/% no center/valor no rodape.
+ * O "rio" laranja/roxo flui de uma altura proporcional ao riverValue da
+ * stage, com cubic bezier suavizando transicoes. 3 layers de opacidade
+ * pra dar profundidade.
  */
 function MiniFunnel({
-  data,
-  loading,
+  stages,
   title,
   lineColor,
   rangeLabel,
 }: {
-  data: MetaFunnelResponse | undefined;
-  loading: boolean;
+  stages: FunnelStageView[];
   title: string;
   lineColor: string;
   rangeLabel: string;
 }) {
-  const stages = data?.stages ?? [];
-
-  if (loading && stages.length === 0) {
-    return (
-      <div className="card" style={{ padding: 20 }}>
-        <FunnelHeader title={title} rangeLabel={rangeLabel} lineColor={lineColor} />
-        <div style={{ color: "var(--ink-3)", padding: "60px 8px", fontSize: 13, textAlign: "center" }}>
-          Carregando…
-        </div>
-      </div>
-    );
-  }
   if (stages.length === 0) {
     return (
       <div className="card" style={{ padding: 20 }}>
@@ -933,15 +938,15 @@ function MiniFunnel({
   const RIVER_AREA_H = VBH - PAD_TOP - PAD_BOT;
   const COL_W = VBW / stages.length;
 
-  const M = Math.max(...stages.map((s) => s.value), 1);
-  const MIN_RIVER_H = 8;  // pra stages quase-zero ficarem visiveis
+  // riverValue normaliza altura do rio. Investimento usa o riverValue de
+  // Impressoes (mesma unidade) — entao rio comeca alinhado ao topo do funil.
+  const M = Math.max(...stages.map((s) => s.riverValue), 1);
+  const MIN_RIVER_H = 8;  // stages quase-zero ainda visiveis
 
-  // Para cada stage: x do centro + altura do rio (proporcional ao valor)
-  // + top/bot Y baseado em centralizacao vertical na area do rio.
   type RiverPoint = { x: number; top: number; bot: number };
   const points: RiverPoint[] = stages.map((s, i) => {
     const x = i * COL_W + COL_W / 2;
-    const h = Math.max((s.value / M) * RIVER_AREA_H, MIN_RIVER_H);
+    const h = Math.max((s.riverValue / M) * RIVER_AREA_H, MIN_RIVER_H);
     const top = PAD_TOP + (RIVER_AREA_H - h) / 2;
     return { x, top, bot: top + h };
   });
@@ -986,7 +991,9 @@ function MiniFunnel({
   };
 
   const gradId = `funnel-grad-${title.replace(/\s+/g, "")}`;
-  const topValue = stages[0].value;
+  // % cumulativo eh contra Impressoes (primeira stage de count) — Investimento
+  // eh moeda, escapa do calculo. stages[1] = Impressoes.
+  const topCount = stages[1]?.value ?? 0;
 
   return (
     <div className="card" style={{ padding: 0, overflow: "hidden" }}>
@@ -1042,61 +1049,76 @@ function MiniFunnel({
           );
         })}
 
-        {/* % cumulativo big text no centro de cada coluna */}
+        {/* Big text no centro:
+            - Investimento (currency): R$ formatado compacto
+            - Impressoes (top count): "100%"
+            - Demais: % cumulativo vs Impressoes (smart decimals) */}
         {stages.map((s, i) => {
           const cx = i * COL_W + COL_W / 2;
           const cy = PAD_TOP + RIVER_AREA_H / 2 + 10;
-          const pct = topValue > 0 ? (s.value / topValue) * 100 : 0;
-          const pctText =
-            pct >= 10 ? `${pct.toFixed(0)}%` :
-            pct >= 1  ? `${pct.toFixed(1)}%` :
-            pct > 0   ? `${pct.toFixed(2)}%` :
-            "0%";
+          let bigText: string;
+          if (s.isCurrency) {
+            bigText = fmtBRL(s.value, { compact: s.value >= 10000 });
+          } else if (i === 1) {
+            bigText = "100%";
+          } else {
+            const pct = topCount > 0 ? (s.value / topCount) * 100 : 0;
+            bigText =
+              pct >= 10 ? `${pct.toFixed(0)}%` :
+              pct >= 1  ? `${pct.toFixed(1)}%` :
+              pct > 0   ? `${pct.toFixed(2)}%` :
+              "0%";
+          }
           return (
             <text
               key={`pct-${s.key}`}
               x={cx} y={cy}
               fill="white"
               textAnchor="middle"
-              fontSize={36}
+              fontSize={28}
               fontWeight={700}
               fontFamily="var(--font-sans)"
-              style={{ fontVariantNumeric: "tabular-nums", letterSpacing: -1 }}
+              style={{ fontVariantNumeric: "tabular-nums", letterSpacing: -0.6 }}
             >
-              {pctText}
+              {bigText}
             </text>
           );
         })}
 
-        {/* Bottom: valor absoluto + delta (drop rate vermelho) */}
+        {/* Bottom: value (com unidade correta) acima, drop% vermelho abaixo.
+            Stack vertical evita overlap mesmo em colunas estreitas. */}
         {stages.map((s, i) => {
           const cx = i * COL_W + COL_W / 2;
-          const valueY = VBH - 24;
-          const drop = s.conversion_from_prev !== null && i > 0
-            ? s.conversion_from_prev - 100
-            : null;
+          const valueY = VBH - 30;
+          const dropY = VBH - 14;
+          // drop% so faz sentido entre stages count→count
+          // (Investimento → Impressoes = unidades diferentes, skip)
+          const prev = stages[i - 1];
+          const dropEligible = i >= 2 && prev && !prev.isCurrency && prev.value > 0;
+          const drop = dropEligible ? (s.value / prev.value - 1) * 100 : null;
+          const valueText = s.isCurrency ? fmtBRL(s.value) : fmtIntCompact(s.value);
           return (
             <g key={`btm-${s.key}`}>
               <text
-                x={cx - (drop !== null ? 24 : 0)} y={valueY}
-                fill="var(--ink-3)"
+                x={cx} y={valueY}
+                fill="var(--ink-2)"
                 textAnchor="middle"
                 fontSize={12}
                 fontFamily="var(--font-sans)"
-                fontWeight={500}
+                fontWeight={600}
                 style={{ fontVariantNumeric: "tabular-nums" }}
               >
-                {fmtInt(s.value)}
+                {valueText}
               </text>
               {drop !== null && (
                 <text
-                  x={cx + 32} y={valueY}
+                  x={cx} y={dropY}
                   fill={drop < 0 ? "var(--neg)" : "var(--pos)"}
                   textAnchor="middle"
-                  fontSize={11}
+                  fontSize={10}
                   fontFamily="var(--font-sans)"
                   fontWeight={600}
-                  style={{ fontVariantNumeric: "tabular-nums" }}
+                  style={{ fontVariantNumeric: "tabular-nums", letterSpacing: 0.2 }}
                 >
                   {drop > 0 ? "+" : ""}{drop.toFixed(0)}%
                 </text>
