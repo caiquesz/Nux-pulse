@@ -5,6 +5,7 @@ import { Suspense, useMemo, useState } from "react";
 
 import { CategoryHeatmap } from "@/components/CategoryHeatmap";
 import { ClientRow } from "@/components/ClientRow";
+import { CompareClients } from "@/components/CompareClients";
 import { NicheRanking } from "@/components/NicheRanking";
 import { Sparkline } from "@/components/primitives/Sparkline";
 import { Tabs, type TabItem } from "@/components/Tabs";
@@ -15,8 +16,8 @@ import {
   type ClientCreatePayload, type PeriodKey, type Tier,
 } from "@/lib/api";
 
-type ViewKey = "clientes" | "nichos" | "categorias";
-const VALID_VIEWS: ViewKey[] = ["clientes", "nichos", "categorias"];
+type ViewKey = "clientes" | "comparar" | "nichos" | "categorias";
+const VALID_VIEWS: ViewKey[] = ["clientes", "comparar", "nichos", "categorias"];
 
 const COLOR_PRESETS = ["#8A5A3B", "#2B6A4F", "#B5454B", "#3B5A8A", "#6B4A8A", "#6F6B68"];
 const VALID_PERIODS: PeriodKey[] = ["7d", "30d", "90d", "mtd", "ytd"];
@@ -356,6 +357,7 @@ function CommandCenter() {
               onChange={setView}
               items={[
                 { key: "clientes", label: "Clientes", count: data.kpis.active_clients },
+                { key: "comparar", label: "Comparar", hint: "Empresa × Empresa side-by-side" },
                 { key: "nichos", label: "Por nicho", count: Object.keys(data.tier_breakdown).filter((k) => k !== "none").length },
                 { key: "categorias", label: "Por categoria", hint: "Score por categoria × nicho" },
               ] as TabItem<ViewKey>[]}
@@ -383,6 +385,15 @@ function CommandCenter() {
               </section>
             )}
           </>
+        )}
+
+        {view === "comparar" && data && (
+          <CompareClients
+            clients={data.clients.map((c) => ({ slug: c.slug, name: c.name }))}
+            rangeOpts={{
+              days: period === "7d" ? 7 : period === "90d" ? 90 : 30,
+            }}
+          />
         )}
 
         {view === "nichos" && (

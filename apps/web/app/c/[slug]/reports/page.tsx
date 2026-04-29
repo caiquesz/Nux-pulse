@@ -126,7 +126,7 @@ export default function ReportsPage() {
 
           {/* Frase-resumo — a history em 1 linha */}
           {ov && primaryConversion && (
-            <div style={{ marginTop: 36, fontSize: 20, lineHeight: 1.5, maxWidth: 640, color: "rgba(245,242,235,0.92)", fontWeight: 400 }}>
+            <div style={{ marginTop: 36, fontSize: 20, lineHeight: 1.5, maxWidth: 640, color: "#ffffff", fontWeight: 400 }}>
               Nesse período investimos{" "}
               <strong style={{ color: heroAccent, fontWeight: 600 }}>{fmtBRL(ov.spend)}</strong>
               {" "}gerando{" "}
@@ -143,7 +143,7 @@ export default function ReportsPage() {
             </div>
           )}
           {ov && !primaryConversion && (
-            <div style={{ marginTop: 36, fontSize: 20, lineHeight: 1.5, color: "rgba(245,242,235,0.92)" }}>
+            <div style={{ marginTop: 36, fontSize: 20, lineHeight: 1.5, color: "#ffffff" }}>
               Nesse período investimos <strong style={{ color: heroAccent }}>{fmtBRL(ov.spend)}</strong>{" "}
               alcançando <strong style={{ color: heroAccent }}>{fmtIntCompact(ov.reach ?? 0)}</strong> pessoas
               com <strong style={{ color: heroAccent }}>{fmtIntCompact(ov.impressions)}</strong> impressões.
