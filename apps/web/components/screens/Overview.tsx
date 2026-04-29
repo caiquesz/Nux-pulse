@@ -364,6 +364,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       { label: "Mensagens", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
       { label: "Leads", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
       { label: "Compras", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
+      { label: "Faturamento", value: "—", unit: "BRL", delta: 0, series: emptySeries, format: fmtBRL },
       { label: "ROAS", value: "—", unit: "x", delta: 0, series: emptySeries, format: (v) => v.toFixed(2) + "x" },
       { label: "Impressões", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
       { label: "Cliques", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
@@ -378,9 +379,14 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
   const purchaseSeries = series.map((p) => p.purchases);
   const impSeries = series.map((p) => p.impressions);
   const clkSeries = series.map((p) => p.clicks);
+  // Faturamento: receita diaria. Sparkline so aparece se houver receita agregada,
+  // pra evitar linha plana no zero pra clientes sem tracking.
+  const totalRevenue = series.reduce((s, p) => s + (p.revenue || 0), 0);
+  const revenueSeries: number[] = totalRevenue > 0
+    ? series.map((p) => p.revenue || 0)
+    : [];
   // ROAS diário = revenue/spend por dia. Só mostra se há receita agregada;
   // do contrário, série vazia (esconde sparkline — não finge dado que não existe).
-  const totalRevenue = series.reduce((s, p) => s + (p.revenue || 0), 0);
   const roasSeries: number[] = totalRevenue > 0
     ? series.map((p) => (p.spend > 0 ? (p.revenue || 0) / p.spend : 0))
     : [];
@@ -424,7 +430,15 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       format: (v) => Math.round(v).toLocaleString("pt-BR"),
     },
     {
-      label: o.revenue > 0 ? `ROAS · ${fmtBRL(o.revenue)} receita` : "ROAS",
+      label: "Faturamento",
+      value: o.revenue > 0 ? fmtBRL(o.revenue) : "—",
+      unit: "BRL",
+      delta: d.revenue ?? 0,
+      series: revenueSeries, // vazio quando nao ha tracking → esconde sparkline
+      format: fmtBRL,
+    },
+    {
+      label: "ROAS",
       value: roasLabel,
       unit: "x",
       delta: d.roas ?? 0,
