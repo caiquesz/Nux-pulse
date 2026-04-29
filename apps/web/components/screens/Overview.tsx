@@ -112,9 +112,35 @@ export function Overview() {
     enabled: !!slug && !!customCompareOpts,
   });
 
+  // Daily series do periodo de comparacao — usado pra sparkline roxo nos
+  // compare cards. Quando custom esta setado, busca pra esse range; senao
+  // usa o range default do previous_period (do overview).
+  const compareDailyOpts: RangeOpts | null = useMemo(() => {
+    if (customCompareOpts) return customCompareOpts;
+    const pp = overviewQ.data?.previous_period;
+    if (pp) return { since: pp.since, until: pp.until };
+    return null;
+  }, [customCompareOpts, overviewQ.data]);
+
+  const compareDailyQ = useQuery<MetaDailyResponse>({
+    queryKey: ["meta", "daily-compare", slug, compareDailyOpts?.since, compareDailyOpts?.until],
+    queryFn: () => metaDaily(slug, compareDailyOpts!),
+    enabled: !!slug && !!compareDailyOpts,
+  });
+
   const kpis = useMemo(
-    () => buildKpis(overviewQ.data, dailyQ.data, compareQ.data),
-    [overviewQ.data, dailyQ.data, compareQ.data],
+    () => buildKpis(overviewQ.data, dailyQ.data, compareQ.data, compareDailyQ.data),
+    [overviewQ.data, dailyQ.data, compareQ.data, compareDailyQ.data],
+  );
+
+  // Date labels pra sparkline do compare period (formato dd/mm).
+  const compareDateLabels = useMemo(
+    () =>
+      (compareDailyQ.data?.series ?? []).map((p) => {
+        const [, mm, dd] = p.date.split("-");
+        return `${dd}/${mm}`;
+      }),
+    [compareDailyQ.data],
   );
   const series = useMemo(() => (dailyQ.data?.series ?? []).map((p) => p.spend), [dailyQ.data]);
   // Labels curtos "dd/mm" pra cada ponto — usados no tooltip dos sparklines.
@@ -297,8 +323,18 @@ export function Overview() {
                 <div className="stat">
                   <span className="stat-label">{k.label}</span>
                   <span className="stat-value stat-value-prev">
-                    {compareQ.isLoading ? "—" : k.prevValue}
+                    {compareQ.isLoading || compareDailyQ.isLoading ? "—" : k.prevValue}
                   </span>
+                  {k.prevSeries.length > 1 && (
+                    <div className="stat-spark">
+                      <Sparkline
+                        series={k.prevSeries}
+                        labels={compareDateLabels}
+                        format={k.format}
+                        height={36}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -434,6 +470,8 @@ type Kpi = {
   value: string;
   /** Valor do periodo de comparacao formatado (mesmo formato que value). */
   prevValue: string;
+  /** Serie diaria do periodo de comparacao (pra sparkline roxo nos compare cards). */
+  prevSeries: number[];
   unit: string;
   /** Ratio: 0.12 = +12% (positivo). Null quando previous era 0 ou indefinido. */
   delta: number | null;
@@ -451,21 +489,23 @@ function buildKpis(
   daily?: MetaDailyResponse,
   /** Quando presente, substitui o.previous_period (period customizavel pelo user). */
   compareOverride?: MetaOverview,
+  /** Daily series do periodo de comparacao — alimenta prevSeries pra sparklines. */
+  compareDaily?: MetaDailyResponse,
 ): Kpi[] {
   const emptySeries: number[] = [];
   const noFmt = (v: number) => v.toLocaleString("pt-BR");
   const dash = "—";
   if (!o) {
     return [
-      { label: "Investimento", value: dash, prevValue: dash, unit: "BRL", delta: null, deltaSemantic: "neutral", series: emptySeries, format: fmtBRL },
-      { label: "Mensagens",    value: dash, prevValue: dash, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
-      { label: "Leads",        value: dash, prevValue: dash, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
-      { label: "Vendas",       value: dash, prevValue: dash, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
-      { label: "Faturamento",  value: dash, prevValue: dash, unit: "BRL", delta: null, deltaSemantic: "up_better", series: emptySeries, format: fmtBRL },
-      { label: "ROAS",         value: dash, prevValue: dash, unit: "x",   delta: null, deltaSemantic: "up_better", series: emptySeries, format: (v) => v.toFixed(2) + "x" },
-      { label: "Impressões",   value: dash, prevValue: dash, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
-      { label: "Cliques",      value: dash, prevValue: dash, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
-      { label: "CTR",          value: dash, prevValue: dash, unit: "%",   delta: null, deltaSemantic: "up_better", series: emptySeries, format: (v) => fmtPct(v) },
+      { label: "Investimento", value: dash, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "neutral", series: emptySeries, format: fmtBRL },
+      { label: "Mensagens",    value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "Leads",        value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "Vendas",       value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "Faturamento",  value: dash, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "up_better", series: emptySeries, format: fmtBRL },
+      { label: "ROAS",         value: dash, prevValue: dash, prevSeries: emptySeries, unit: "x",   delta: null, deltaSemantic: "up_better", series: emptySeries, format: (v) => v.toFixed(2) + "x" },
+      { label: "Impressões",   value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "Cliques",      value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "CTR",          value: dash, prevValue: dash, prevSeries: emptySeries, unit: "%",   delta: null, deltaSemantic: "up_better", series: emptySeries, format: (v) => fmtPct(v) },
     ];
   }
 
@@ -476,6 +516,21 @@ function buildKpis(
   const purchaseSeries = series.map((p) => p.purchases);
   const impSeries = series.map((p) => p.impressions);
   const clkSeries = series.map((p) => p.clicks);
+  // prev* series — sparkline do compare card (linha roxa). Vazio quando
+  // compareDaily nao disponivel; sparkline nao renderiza nesse caso.
+  const prevRows = compareDaily?.series ?? [];
+  const prevSpendSeries = prevRows.map((p) => p.spend);
+  const prevMsgSeries = prevRows.map((p) => p.messages);
+  const prevLeadSeries = prevRows.map((p) => p.leads);
+  const prevPurchaseSeries = prevRows.map((p) => p.purchases);
+  const prevImpSeries = prevRows.map((p) => p.impressions);
+  const prevClkSeries = prevRows.map((p) => p.clicks);
+  const prevTotalRevenueAgg = prevRows.reduce((s, p) => s + (p.revenue || 0), 0);
+  const prevRevenueSeries: number[] = prevTotalRevenueAgg > 0 ? prevRows.map((p) => p.revenue || 0) : [];
+  const prevRoasSeries: number[] = prevTotalRevenueAgg > 0
+    ? prevRows.map((p) => (p.spend > 0 ? (p.revenue || 0) / p.spend : 0))
+    : [];
+  const prevCtrSeries = prevRows.map((p) => (p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0));
   // Selecao inteligente da fonte de Faturamento/Vendas.
   //
   // Trackcore eh GROUND TRUTH quando funciona (mensagem chave detecta venda
@@ -553,9 +608,10 @@ function buildKpis(
       label: "Investimento",
       value: fmtBRL(o.spend),
       prevValue: fmtBRL(prev.spend),
+      prevSeries: prevSpendSeries,
       unit: "BRL",
       delta: usingCustomCompare ? ratio(o.spend, prev.spend) : (d.spend ?? ratio(o.spend, prev.spend)),
-      deltaSemantic: "neutral", // gastar mais nao eh bom nem ruim por si só
+      deltaSemantic: "neutral",
       series: spendSeries,
       format: fmtBRL,
     },
@@ -563,6 +619,7 @@ function buildKpis(
       label: o.messages > 0 ? `Mensagens · R$${o.cost_per_message.toFixed(2)}/msg` : "Mensagens",
       value: fmtIntCompact(o.messages),
       prevValue: fmtIntCompact(prev.messages),
+      prevSeries: prevMsgSeries,
       unit: "",
       delta: usingCustomCompare ? ratio(o.messages, prev.messages) : (d.messages ?? ratio(o.messages, prev.messages)),
       deltaSemantic: "up_better",
@@ -573,6 +630,7 @@ function buildKpis(
       label: o.leads > 0 ? `Leads · R$${o.cost_per_lead.toFixed(2)}/lead` : "Leads",
       value: fmtIntCompact(o.leads),
       prevValue: fmtIntCompact(prev.leads),
+      prevSeries: prevLeadSeries,
       unit: "",
       delta: usingCustomCompare ? ratio(o.leads, prev.leads) : (d.leads ?? ratio(o.leads, prev.leads)),
       deltaSemantic: "up_better",
@@ -587,6 +645,7 @@ function buildKpis(
         : (usingTrackcoreSales ? "Vendas · via Trackcore" : "Vendas"),
       value: fmtIntCompact(effectivePurchases),
       prevValue: fmtIntCompact(prevEffectivePurchases),
+      prevSeries: prevPurchaseSeries,
       unit: "",
       delta: ratio(effectivePurchases, prevEffectivePurchases),
       deltaSemantic: "up_better",
@@ -597,6 +656,7 @@ function buildKpis(
       label: usingTrackcoreRevenue ? "Faturamento · via Trackcore" : "Faturamento",
       value: effectiveRevenue > 0 ? fmtBRL(effectiveRevenue) : "—",
       prevValue: prevEffectiveRevenue > 0 ? fmtBRL(prevEffectiveRevenue) : "—",
+      prevSeries: prevRevenueSeries,
       unit: "BRL",
       delta: ratio(effectiveRevenue, prevEffectiveRevenue),
       deltaSemantic: "up_better",
@@ -607,6 +667,7 @@ function buildKpis(
       label: usingTrackcoreRevenue ? "ROAS · via Trackcore" : "ROAS",
       value: roasLabel,
       prevValue: prevEffectiveRoas > 0 ? `${prevEffectiveRoas.toFixed(2)}x` : "—",
+      prevSeries: prevRoasSeries,
       unit: "x",
       delta: ratio(effectiveRoas, prevEffectiveRoas),
       deltaSemantic: "up_better",
@@ -617,6 +678,7 @@ function buildKpis(
       label: "Impressões",
       value: fmtIntCompact(o.impressions),
       prevValue: fmtIntCompact(prev.impressions),
+      prevSeries: prevImpSeries,
       unit: "",
       delta: usingCustomCompare ? ratio(o.impressions, prev.impressions) : (d.impressions ?? ratio(o.impressions, prev.impressions)),
       deltaSemantic: "up_better",
@@ -627,6 +689,7 @@ function buildKpis(
       label: "Cliques",
       value: fmtIntCompact(o.clicks),
       prevValue: fmtIntCompact(prev.clicks),
+      prevSeries: prevClkSeries,
       unit: "",
       delta: usingCustomCompare ? ratio(o.clicks, prev.clicks) : (d.clicks ?? ratio(o.clicks, prev.clicks)),
       deltaSemantic: "up_better",
@@ -637,6 +700,7 @@ function buildKpis(
       label: "CTR",
       value: fmtPct(o.ctr),
       prevValue: fmtPct(prev.ctr),
+      prevSeries: prevCtrSeries,
       unit: "%",
       delta: usingCustomCompare ? ratio(o.ctr, prev.ctr) : (d.ctr ?? ratio(o.ctr, prev.ctr)),
       deltaSemantic: "up_better",

@@ -707,52 +707,23 @@ button.card:hover .row-chevron {
 .card.tight { padding: 0; overflow: hidden; }
 
 /* ── Previous-period grid (comparacao) ──
-   Mesma destaque visual que o grid atual, mas COR DIFERENTE: purple vibrante
-   (--data-violet) sutilmente misturado no gradient + glow purple no shadow.
-   Permite o user identificar "comparacao" pela cor (semantica), nao pela
-   redução de peso visual (que descartava informacao). */
-.grid-kpi-prev .card.card-prev {
-  background:
-    linear-gradient(180deg,
-      color-mix(in oklch, var(--data-violet) 14%, var(--surface-hi)) 0%,
-      color-mix(in oklch, var(--data-violet) 5%, var(--surface)) 100%);
-  border: 1px solid color-mix(in oklch, var(--data-violet) 28%, var(--border));
-  border-top-color: color-mix(in oklch, var(--data-violet) 55%, var(--border-hi));
-  border-radius: 18px;
-  padding: var(--card-pad);
-  opacity: 1;
-  box-shadow:
-    inset 0 1px 0 color-mix(in oklch, var(--data-violet) 22%, rgba(255,255,255,0.10)),
-    0 1px 0 color-mix(in oklch, var(--data-violet) 12%, rgba(255,255,255,0.02)),
-    0 24px 48px -16px rgba(0,0,0,0.6),
-    0 8px 16px -8px rgba(0,0,0,0.3),
-    0 0 32px -16px var(--data-violet);
-  transition:
-    border-color 280ms cubic-bezier(.2,.8,.2,1),
-    transform 280ms cubic-bezier(.2,.8,.2,1),
-    box-shadow 280ms cubic-bezier(.2,.8,.2,1);
-}
-.grid-kpi-prev .card.card-prev:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in oklch, var(--data-violet) 40%, var(--border-2));
-  border-top-color: color-mix(in oklch, var(--data-violet) 65%, var(--border-hi));
-  box-shadow:
-    inset 0 1px 0 color-mix(in oklch, var(--data-violet) 28%, rgba(255,255,255,0.14)),
-    0 1px 0 color-mix(in oklch, var(--data-violet) 16%, rgba(255,255,255,0.04)),
-    0 32px 64px -16px rgba(0,0,0,0.7),
-    0 16px 32px -8px rgba(0,0,0,0.4),
-    0 0 48px -12px var(--data-violet);
-}
+   Cards visualmente IDENTICOS aos primary (mesmo gradient dark, mesmas sombras).
+   A diferenca eh apenas a cor do SPARKLINE dentro: roxo (--data-violet) em vez
+   do laranja default. Override via CSS var --chart-line escopado a esse grid. */
 .grid-kpi-prev .stat { gap: 8px; }
-.grid-kpi-prev .stat-label {
-  color: color-mix(in oklch, var(--data-violet) 60%, var(--ink-3));
-}
 .stat-value.stat-value-prev {
   font-size: clamp(18px, 1.8vw, 28px);
   letter-spacing: -1px;
   font-weight: 700;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+}
+/* Sparkline em compare cards: troca laranja → roxo via CSS variables.
+   O Sparkline usa var(--chart-line) e var(--chart-fill) — sobrescrevendo
+   no scope de .grid-kpi-prev faz a linha + fill ficarem roxos. */
+.grid-kpi-prev .card.card-prev {
+  --chart-line: var(--data-violet);
+  --chart-fill: oklch(0.70 0.20 280 / 0.18);
 }
 .card-head {
   display: flex;
