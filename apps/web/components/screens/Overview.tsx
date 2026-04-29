@@ -882,10 +882,12 @@ function statusDot(s: string | null): "on" | "warn" | "off" {
 }
 
 /**
- * MiniFunnel — render compacto de funil de conversao usado no Overview.
- * Layout ESTATICO (nao tem barras proporcionais ao valor) — cada stage
- * eh uma linha igual com colored stripe (lineColor) na lateral. Usado em
- * pares: atual (orange) e comparacao (purple).
+ * MiniFunnel — funil de conversao com RIVER FLOWING (SVG path curvado).
+ * Estilo signature: cada stage eh uma coluna, com header (label + icone),
+ * % cumulativo grande no centro, valor absoluto + delta vermelho no rodape.
+ * O "rio" laranja/roxo flui de uma altura proporcional ao valor da stage,
+ * com cubic bezier suavizando a transicao entre stages. 3 layers de
+ * opacidade pra dar profundidade (estilo referencia Cryptox/dashboards modernos).
  */
 function MiniFunnel({
   data,
@@ -901,76 +903,224 @@ function MiniFunnel({
   rangeLabel: string;
 }) {
   const stages = data?.stages ?? [];
-  return (
-    <div className="card" style={{ padding: 20 }}>
-      <div style={{
-        display: "flex", justifyContent: "space-between",
-        alignItems: "baseline", marginBottom: 14, gap: 12,
-      }}>
-        <div className="card-title" style={{ color: lineColor, letterSpacing: 0.2 }}>
-          {title}
-        </div>
-        <div className="card-sub" style={{ margin: 0 }}>{rangeLabel}</div>
-      </div>
-      {loading && stages.length === 0 ? (
-        <div style={{ color: "var(--ink-3)", padding: "24px 8px", fontSize: 13 }}>
+
+  if (loading && stages.length === 0) {
+    return (
+      <div className="card" style={{ padding: 20 }}>
+        <FunnelHeader title={title} rangeLabel={rangeLabel} lineColor={lineColor} />
+        <div style={{ color: "var(--ink-3)", padding: "60px 8px", fontSize: 13, textAlign: "center" }}>
           Carregando…
         </div>
-      ) : stages.length === 0 ? (
-        <div style={{ color: "var(--ink-4)", padding: "24px 8px", fontSize: 12 }}>
+      </div>
+    );
+  }
+  if (stages.length === 0) {
+    return (
+      <div className="card" style={{ padding: 20 }}>
+        <FunnelHeader title={title} rangeLabel={rangeLabel} lineColor={lineColor} />
+        <div style={{ color: "var(--ink-4)", padding: "60px 8px", fontSize: 12, textAlign: "center" }}>
           Sem dados no período
         </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {stages.map((s, i) => (
-            <div
-              key={s.key}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr auto auto",
-                gap: 12,
-                alignItems: "center",
-                padding: "10px 12px",
-                background: "rgba(255,255,255,0.02)",
-                borderRadius: 8,
-                borderLeft: `2px solid ${lineColor}`,
-              }}
+      </div>
+    );
+  }
+
+  // Geometria do SVG. viewBox fixo; elemento escala com o container.
+  const VBW = 800;
+  const VBH = 360;
+  const PAD_TOP = 70;     // espaco pro label + icone
+  const PAD_BOT = 56;     // espaco pro valor absoluto + delta
+  const RIVER_AREA_H = VBH - PAD_TOP - PAD_BOT;
+  const COL_W = VBW / stages.length;
+
+  const M = Math.max(...stages.map((s) => s.value), 1);
+  const MIN_RIVER_H = 8;  // pra stages quase-zero ficarem visiveis
+
+  // Para cada stage: x do centro + altura do rio (proporcional ao valor)
+  // + top/bot Y baseado em centralizacao vertical na area do rio.
+  type RiverPoint = { x: number; top: number; bot: number };
+  const points: RiverPoint[] = stages.map((s, i) => {
+    const x = i * COL_W + COL_W / 2;
+    const h = Math.max((s.value / M) * RIVER_AREA_H, MIN_RIVER_H);
+    const top = PAD_TOP + (RIVER_AREA_H - h) / 2;
+    return { x, top, bot: top + h };
+  });
+  // Adiciona ponto na borda esquerda + direita pra rio cobrir colunas inteiras
+  const left: RiverPoint = { x: 0, top: points[0].top, bot: points[0].bot };
+  const right: RiverPoint = {
+    x: VBW,
+    top: points[points.length - 1].top,
+    bot: points[points.length - 1].bot,
+  };
+  const all: RiverPoint[] = [left, ...points, right];
+
+  // Gera path do rio: top edge (cubic bezier suave) + right edge + bottom edge (reverso) + close.
+  // Tension controla o quao curvada a transicao fica (0.0 = reta, 0.5 = bem curvada).
+  const buildPath = (scale: number) => {
+    // Escala vertical (1.0 = baseline, 1.2 = layer outer mais largo).
+    const cy = PAD_TOP + RIVER_AREA_H / 2;
+    const sp = all.map((p) => ({
+      x: p.x,
+      top: cy + (p.top - cy) * scale,
+      bot: cy + (p.bot - cy) * scale,
+    }));
+    let d = `M ${sp[0].x},${sp[0].top}`;
+    for (let i = 1; i < sp.length; i++) {
+      const p0 = sp[i - 1];
+      const p1 = sp[i];
+      const dx = p1.x - p0.x;
+      const c1x = p0.x + dx * 0.5;
+      const c2x = p1.x - dx * 0.5;
+      d += ` C ${c1x},${p0.top} ${c2x},${p1.top} ${p1.x},${p1.top}`;
+    }
+    d += ` L ${sp[sp.length - 1].x},${sp[sp.length - 1].bot}`;
+    for (let i = sp.length - 2; i >= 0; i--) {
+      const p0 = sp[i + 1];
+      const p1 = sp[i];
+      const dx = p0.x - p1.x;
+      const c1x = p0.x - dx * 0.5;
+      const c2x = p1.x + dx * 0.5;
+      d += ` C ${c1x},${p0.bot} ${c2x},${p1.bot} ${p1.x},${p1.bot}`;
+    }
+    return d + " Z";
+  };
+
+  const gradId = `funnel-grad-${title.replace(/\s+/g, "")}`;
+  const topValue = stages[0].value;
+
+  return (
+    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ padding: "20px 20px 0" }}>
+        <FunnelHeader title={title} rangeLabel={rangeLabel} lineColor={lineColor} />
+      </div>
+      <svg
+        viewBox={`0 0 ${VBW} ${VBH}`}
+        preserveAspectRatio="none"
+        style={{ display: "block", width: "100%", height: "auto", marginTop: 8 }}
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={lineColor} stopOpacity="0.85" />
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0.55" />
+          </linearGradient>
+        </defs>
+
+        {/* Vertical separators (sutis, atras de tudo) */}
+        {stages.slice(1).map((_, i) => (
+          <line
+            key={`sep-${i}`}
+            x1={(i + 1) * COL_W} y1={PAD_TOP - 6}
+            x2={(i + 1) * COL_W} y2={VBH - PAD_BOT + 6}
+            stroke="rgba(255,255,255,0.04)"
+            strokeWidth={1}
+          />
+        ))}
+
+        {/* River — 3 layers de profundidade (outer mais largo + transparente,
+            inner solid). Scale 1.35 / 1.15 / 1.0 cria o "halo" do rio. */}
+        <path d={buildPath(1.35)} fill={lineColor} opacity={0.10} />
+        <path d={buildPath(1.15)} fill={lineColor} opacity={0.20} />
+        <path d={buildPath(1.0)}  fill={`url(#${gradId})`} />
+
+        {/* Stage labels (header) */}
+        {stages.map((s, i) => {
+          const cx = i * COL_W + COL_W / 2;
+          return (
+            <text
+              key={`lbl-${s.key}`}
+              x={cx} y={30}
+              fill="var(--ink-3)"
+              textAnchor="middle"
+              fontSize={11}
+              fontFamily="var(--font-sans)"
+              fontWeight={600}
+              letterSpacing={2}
+              style={{ textTransform: "uppercase" }}
             >
-              <span style={{ fontSize: 12, color: "var(--ink)", fontWeight: 500 }}>
-                {s.label}
-              </span>
-              <span className="mono" style={{
-                fontWeight: 700,
-                fontSize: 14,
-                fontVariantNumeric: "tabular-nums",
-                color: "var(--ink)",
-                minWidth: 60,
-                textAlign: "right",
-              }}>
+              {s.label}
+            </text>
+          );
+        })}
+
+        {/* % cumulativo big text no centro de cada coluna */}
+        {stages.map((s, i) => {
+          const cx = i * COL_W + COL_W / 2;
+          const cy = PAD_TOP + RIVER_AREA_H / 2 + 10;
+          const pct = topValue > 0 ? (s.value / topValue) * 100 : 0;
+          const pctText =
+            pct >= 10 ? `${pct.toFixed(0)}%` :
+            pct >= 1  ? `${pct.toFixed(1)}%` :
+            pct > 0   ? `${pct.toFixed(2)}%` :
+            "0%";
+          return (
+            <text
+              key={`pct-${s.key}`}
+              x={cx} y={cy}
+              fill="white"
+              textAnchor="middle"
+              fontSize={36}
+              fontWeight={700}
+              fontFamily="var(--font-sans)"
+              style={{ fontVariantNumeric: "tabular-nums", letterSpacing: -1 }}
+            >
+              {pctText}
+            </text>
+          );
+        })}
+
+        {/* Bottom: valor absoluto + delta (drop rate vermelho) */}
+        {stages.map((s, i) => {
+          const cx = i * COL_W + COL_W / 2;
+          const valueY = VBH - 24;
+          const drop = s.conversion_from_prev !== null && i > 0
+            ? s.conversion_from_prev - 100
+            : null;
+          return (
+            <g key={`btm-${s.key}`}>
+              <text
+                x={cx - (drop !== null ? 24 : 0)} y={valueY}
+                fill="var(--ink-3)"
+                textAnchor="middle"
+                fontSize={12}
+                fontFamily="var(--font-sans)"
+                fontWeight={500}
+                style={{ fontVariantNumeric: "tabular-nums" }}
+              >
                 {fmtInt(s.value)}
-              </span>
-              {s.conversion_from_prev !== null && i > 0 ? (
-                <span className="mono" style={{
-                  fontSize: 10,
-                  color: "var(--ink-3)",
-                  letterSpacing: 0.3,
-                  minWidth: 56,
-                  textAlign: "right",
-                }}>
-                  {fmtPct(s.conversion_from_prev)}
-                </span>
-              ) : (
-                <span style={{
-                  fontSize: 10,
-                  color: "var(--ink-4)",
-                  minWidth: 56,
-                  textAlign: "right",
-                }}>—</span>
+              </text>
+              {drop !== null && (
+                <text
+                  x={cx + 32} y={valueY}
+                  fill={drop < 0 ? "var(--neg)" : "var(--pos)"}
+                  textAnchor="middle"
+                  fontSize={11}
+                  fontFamily="var(--font-sans)"
+                  fontWeight={600}
+                  style={{ fontVariantNumeric: "tabular-nums" }}
+                >
+                  {drop > 0 ? "+" : ""}{drop.toFixed(0)}%
+                </text>
               )}
-            </div>
-          ))}
-        </div>
-      )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+function FunnelHeader({
+  title, rangeLabel, lineColor,
+}: { title: string; rangeLabel: string; lineColor: string }) {
+  return (
+    <div style={{
+      display: "flex", justifyContent: "space-between",
+      alignItems: "baseline", gap: 12,
+    }}>
+      <div className="card-title" style={{ color: lineColor, letterSpacing: 0.2 }}>
+        {title}
+      </div>
+      <div className="card-sub" style={{ margin: 0 }}>{rangeLabel}</div>
     </div>
   );
 }
