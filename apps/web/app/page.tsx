@@ -146,7 +146,10 @@ function CommandCenter() {
   ) ?? [];
 
   return (
-    <main style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)" }}>
+    <main
+      className="stage-glow"
+      style={{ minHeight: "100vh", background: "var(--bg)", color: "var(--ink)" }}
+    >
       <div style={{ maxWidth: 1320, margin: "0 auto", padding: "32px 24px 56px" }}>
         {/* HEADER */}
         <header style={{
@@ -373,7 +376,7 @@ function CommandCenter() {
               </div>
             )}
             {data && data.clients.length > 0 && (
-              <section style={{ display: "grid", gap: 8 }}>
+              <section className="stagger-fade-up" style={{ display: "grid", gap: 8 }}>
                 {sortedClients.map((c) => (
                   <ClientRow key={c.slug} row={c} />
                 ))}

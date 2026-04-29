@@ -61,7 +61,7 @@ export default function AlertsPage() {
             <div
               key={i}
               className="card"
-              style={{ padding: 16, borderLeft: `3px solid ${sev}`, display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 16, alignItems: "center" }}
+              style={{ padding: 16, display: "grid", gridTemplateColumns: "auto 1fr auto", gap: 16, alignItems: "center" }}
             >
               <div style={{ width: 32, height: 32, borderRadius: 6, background: bg, display: "flex", alignItems: "center", justifyContent: "center", color: sev, fontSize: 16, fontWeight: 700 }}>
                 !

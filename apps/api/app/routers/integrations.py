@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from app.core.auth import require_api_key
 from app.core.config import settings
 from app.core.db import get_db
 from app.models.client import Client
@@ -159,4 +160,151 @@ def trackcore_event(
         "event_id": payload.event_id,
         "inserted": inserted,
         "kind": mapped_kind,
+    }
+
+
+# ─── Trackcore health check ────────────────────────────────────────────────
+
+
+@router.get("/clients/{slug}/trackcore/health", dependencies=[Depends(require_api_key)])
+def trackcore_health(slug: str, db: Session = Depends(get_db)) -> dict:
+    """Diagnostico automatico do estado da integracao Trackcore por cliente.
+
+    Analisa `manual_conversions` dos ultimos 30 dias e retorna:
+      - status: healthy | degraded | broken | inactive
+      - issues: lista de problemas detectados com codigo + acao recomendada
+      - metrics: contadores e stats brutos pra UI mostrar contexto
+
+    Detecta padroes:
+      - inactive: zero eventos Trackcore nos 30d
+      - broken: tem leads com valor mas zero purchases (signature do caso
+        Comtex — Trackcore manda placeholders de R$ X mas nao detecta venda real)
+      - degraded: razao de purchases/leads muito baixa (< 1%) com volume alto
+      - stale: ultimo purchase > 14 dias atras com leads recentes
+      - uniform_values: 80%+ dos leads-com-valor compartilham mesmo valor
+        (= placeholders de CPL alvo, nao vendas reais)
+    """
+    from datetime import date, timedelta
+    from sqlalchemy import func
+
+    client = db.query(Client).filter(Client.slug == slug, Client.is_active.is_(True)).first()
+    if not client:
+        raise HTTPException(404, "client not found")
+
+    today = date.today()
+    since = today - timedelta(days=30)
+
+    rows = (
+        db.query(ManualConversion)
+        .filter(
+            ManualConversion.client_id == client.id,
+            ManualConversion.date >= since,
+            ManualConversion.attribution_source == "trackcore",
+        )
+        .all()
+    )
+
+    metrics = {
+        "events_30d": len(rows),
+        "purchases": 0,
+        "leads": 0,
+        "leads_with_value": 0,
+        "messages": 0,
+        "purchases_revenue": 0.0,
+        "leads_revenue": 0.0,
+        "last_purchase_date": None,
+        "last_event_date": None,
+        "purchase_value_distribution": {},  # value → count
+        "lead_value_distribution": {},
+    }
+
+    for r in rows:
+        rev = float(r.revenue or 0)
+        date_str = r.date.isoformat() if r.date else None
+        if date_str and (metrics["last_event_date"] is None or date_str > metrics["last_event_date"]):
+            metrics["last_event_date"] = date_str
+        if r.kind == "purchase":
+            metrics["purchases"] += int(r.count or 1)
+            metrics["purchases_revenue"] += rev
+            if date_str and (metrics["last_purchase_date"] is None or date_str > metrics["last_purchase_date"]):
+                metrics["last_purchase_date"] = date_str
+            if rev > 0:
+                key = f"{rev:.2f}"
+                metrics["purchase_value_distribution"][key] = metrics["purchase_value_distribution"].get(key, 0) + 1
+        elif r.kind == "lead":
+            metrics["leads"] += int(r.count or 1)
+            metrics["leads_revenue"] += rev
+            if rev > 0:
+                metrics["leads_with_value"] += 1
+                key = f"{rev:.2f}"
+                metrics["lead_value_distribution"][key] = metrics["lead_value_distribution"].get(key, 0) + 1
+        elif r.kind == "message":
+            metrics["messages"] += int(r.count or 1)
+
+    issues: list[dict] = []
+
+    # 1. Integracao inativa: zero eventos
+    if metrics["events_30d"] == 0:
+        issues.append({
+            "code": "trackcore_inactive",
+            "severity": "high",
+            "title": "Trackcore não está enviando eventos",
+            "detail": "Zero eventos nos últimos 30 dias. Integração possivelmente desconectada.",
+            "action": "Verificar config webhook no Trackcore — o cliente está ativo lá? URL aponta pro Pulse?",
+        })
+
+    # 2. Padrao Comtex: muitos leads com valor uniforme + poucas/zero purchases
+    if metrics["leads_with_value"] > 0 and metrics["purchases"] <= 1:
+        # Sao valores uniformes (placeholders)?
+        ldist = metrics["lead_value_distribution"]
+        if ldist:
+            top_value, top_count = max(ldist.items(), key=lambda kv: kv[1])
+            uniform_ratio = top_count / max(1, sum(ldist.values()))
+            if uniform_ratio >= 0.6 and metrics["leads_with_value"] >= 5:
+                issues.append({
+                    "code": "trackcore_placeholders_only",
+                    "severity": "high",
+                    "title": "Trackcore só envia placeholders, não vendas reais",
+                    "detail": f"{metrics['leads_with_value']} leads com valor R$ {top_value} ({uniform_ratio*100:.0f}% iguais) e apenas {metrics['purchases']} venda real detectada via mensagem chave. Os valores uniformes são placeholders de CPL alvo, não vendas.",
+                    "action": "No Trackcore: configurar webhook do evento 'venda detectada' (mensagem chave) pra apontar pro Pulse. Hoje só o webhook de lead está disparando.",
+                })
+
+    # 3. Volume de leads alto mas zero purchase
+    if metrics["leads"] >= 50 and metrics["purchases"] == 0:
+        issues.append({
+            "code": "trackcore_no_sales",
+            "severity": "high",
+            "title": "Vendas Trackcore não estão chegando",
+            "detail": f"{metrics['leads']} leads detectados mas zero vendas via mensagem chave em 30 dias. Webhook de venda provavelmente não está configurado.",
+            "action": "Verificar config no Trackcore: cliente tem webhook de evento 'sale'/'purchase' habilitado?",
+        })
+
+    # 4. Ultima venda muito antiga
+    if metrics["last_purchase_date"] and metrics["leads"] > 10:
+        last_p = date.fromisoformat(metrics["last_purchase_date"])
+        days_since = (today - last_p).days
+        if days_since >= 14:
+            issues.append({
+                "code": "trackcore_stale_purchases",
+                "severity": "medium",
+                "title": f"Última venda há {days_since} dias",
+                "detail": f"Pulse recebeu última venda Trackcore em {metrics['last_purchase_date']}, mas ainda há {metrics['leads']} leads recentes. Pode ter parado de detectar vendas.",
+                "action": "Auditar: vendas recentes tiveram mensagem chave no WhatsApp?",
+            })
+
+    # Status agregado
+    high_count = sum(1 for i in issues if i["severity"] == "high")
+    if high_count > 0:
+        status = "broken" if metrics["events_30d"] == 0 else "degraded"
+    elif issues:
+        status = "degraded"
+    else:
+        status = "healthy"
+
+    return {
+        "status": status,
+        "issues": issues,
+        "metrics": metrics,
+        "client_slug": slug,
+        "checked_at": date.today().isoformat(),
     }

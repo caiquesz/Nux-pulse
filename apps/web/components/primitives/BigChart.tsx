@@ -1,10 +1,22 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { seriesToPath, seriesToBars, formatShort } from "@/lib/chart-utils";
+
+/** Linha extra com escala propria (auto-normalizada). Render solido, sem dasharray. */
+export type ExtraSeries = {
+  values: number[];
+  label: string;
+  /** Cor — use tokens da paleta de dados: var(--data-cyan), var(--data-lime), etc. */
+  color: string;
+  format?: (v: number) => string;
+};
 
 type Props = {
   series: number[];
+  /** @deprecated Use `extras` em vez de `compare` — extras suporta N linhas com cores proprias. */
   compare?: number[];
+  /** Linhas adicionais (ex: conversas, vendas). Renderizadas solidas com cores da paleta de dados. */
+  extras?: ExtraSeries[];
   /** Labels (datas, ex: "14/04") alinhadas com cada ponto — aparece no tooltip. */
   labels?: string[];
   seriesLabel?: string;
@@ -13,7 +25,7 @@ type Props = {
   compareFormat?: (v: number) => string;
   style?: "line" | "area" | "bar";
   height?: number;
-  /** CSS custom-property ou cor direta (ex: "var(--lime)" ou "#D4F24A"). */
+  /** CSS custom-property ou cor direta (ex: "var(--data-orange)" ou "#FF6B35"). */
   lineColor?: string;
   fillColor?: string;
   /** Cor da linha de comparação (default neutro). */
@@ -26,6 +38,7 @@ type Props = {
 export function BigChart({
   series,
   compare,
+  extras,
   labels,
   seriesLabel,
   seriesFormat = (v) => formatShort(v, true),
@@ -42,6 +55,8 @@ export function BigChart({
   const wrap = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(600);
   const [hover, setHover] = useState<{ idx: number; x: number } | null>(null);
+  const fillGradId = `bigchart-fill-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  const lineGradId = `bigchart-line-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
 
   useEffect(() => {
     if (!wrap.current) return;
@@ -52,7 +67,9 @@ export function BigChart({
 
   // Paddings — generosos o suficiente pra comportar labels "R$ 1.234" sem overflow.
   const padL = 52;
-  const padR = compare ? 52 : 16;
+  // Sem coluna direita de eixo: extras / compare aparecem so no tooltip pra
+  // evitar gridlines duplicadas confusas. Mantem padR pequeno.
+  const padR = 16;
   const padT = 12;
   const padB = 26;
   const plotW = Math.max(1, w - padL - padR);
@@ -62,12 +79,18 @@ export function BigChart({
   // Truque: renderiza o gráfico numa caixa diferente via transform.
   const { line, area } = useMemo(() => seriesToPath(series, plotW + padL * 2, plotH + padT * 2, padL), [series, plotW, plotH, padL, padT]);
   const cmpPath = useMemo(() => (compare ? seriesToPath(compare, plotW + padL * 2, plotH + padT * 2, padL) : null), [compare, plotW, plotH, padL, padT]);
+  // Extras: cada um auto-normalizado independente (escala propria). Path usa o mesmo util.
+  const extraPaths = useMemo(
+    () => (extras ?? []).map((e) => ({
+      ...e,
+      path: seriesToPath(e.values, plotW + padL * 2, plotH + padT * 2, padL),
+    })),
+    [extras, plotW, plotH, padL, padT],
+  );
   const barData = useMemo(() => seriesToBars(series, plotW, plotH, 3), [series, plotW, plotH]);
 
   const max = Math.max(...series);
   const min = Math.min(...series, 0);
-  const cmpMax = compare ? Math.max(...compare) : 0;
-  const cmpMin = compare ? Math.min(...compare, 0) : 0;
 
   const yTicks = 4;
   const gridLines = Array.from({ length: yTicks + 1 }, (_, i) => padT + (plotH * i) / yTicks);
@@ -100,6 +123,21 @@ export function BigChart({
   return (
     <div ref={wrap} style={{ position: "relative", height }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
       <svg width={w} height={height} style={{ display: "block" }}>
+        <defs>
+          {/* Fill gradient: line color at top (32% opacity) → transparent at bottom.
+              Plus a subtle horizontal sheen for the "fluid" Cryptox-style fill. */}
+          <linearGradient id={fillGradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"  stopColor={lineColor} stopOpacity="0.36" />
+            <stop offset="50%" stopColor={lineColor} stopOpacity="0.12" />
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0" />
+          </linearGradient>
+          {/* Line gradient: brighter on top of arc, slightly dimmer at sides. */}
+          <linearGradient id={lineGradId} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%"   stopColor={lineColor} stopOpacity="0.7" />
+            <stop offset="50%"  stopColor={lineColor} stopOpacity="1" />
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0.7" />
+          </linearGradient>
+        </defs>
         {/* Grid lines horizontais */}
         {gridLines.map((y, i) => (
           <line key={i} x1={padL} x2={w - padR} y1={y} y2={y} stroke={gridColor} strokeWidth={1} />
@@ -116,16 +154,8 @@ export function BigChart({
           );
         })}
 
-        {/* Eixo Y direito (compare) — só se existir serie de comparação */}
-        {compare && gridLines.map((y, i) => {
-          const v = cmpMax - ((cmpMax - cmpMin) * i) / yTicks;
-          return (
-            <text key={`cmp-${i}`} x={w - padR + 6} y={y + 3} fontSize={9} fontFamily="var(--font-mono)"
-                  fill={compareColor} letterSpacing={0.3} textAnchor="start" opacity={0.85}>
-              {compareFormat(v)}
-            </text>
-          );
-        })}
+        {/* Sem eixo Y direito — extras tem escalas heterogeneas (R$ × contagem),
+            entao mostramos valores so no tooltip pra evitar gridlines confusas. */}
 
         {/* Eixo X (datas) */}
         {xLabels.map((l, i) => (
@@ -142,11 +172,27 @@ export function BigChart({
           ))
         ) : (
           <>
-            {style !== "line" && <path d={area} fill={fillColor} />}
+            {style !== "line" && <path d={area} fill={`url(#${fillGradId})`} />}
+            {/* Extras (multi-line) renderizadas SOLIDAS com cores proprias.
+                Layer abaixo da linha primaria pra primaria continuar dominante. */}
+            {extraPaths.map((e, i) => (
+              <path
+                key={`extra-${i}`}
+                d={e.path.line}
+                fill="none"
+                stroke={e.color}
+                strokeWidth={1.75}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={0.92}
+              />
+            ))}
+            {/* compare legacy — agora SOLIDO (era tracejado). Recomenda-se migrar pra extras. */}
             {cmpPath && (
-              <path d={cmpPath.line} fill="none" stroke={compareColor} strokeWidth={1.5} strokeDasharray="5 4" />
+              <path d={cmpPath.line} fill="none" stroke={compareColor} strokeWidth={1.75}
+                    strokeLinecap="round" strokeLinejoin="round" opacity={0.92} />
             )}
-            <path d={line} fill="none" stroke={lineColor} strokeWidth={1.75} />
+            <path d={line} fill="none" stroke={`url(#${lineGradId})`} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
           </>
         )}
 
@@ -176,16 +222,26 @@ export function BigChart({
           </div>
           {compare && (
             <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginTop: 3 }}>
-              <span
-                style={{
-                  width: 8, height: 2, background: compareColor,
-                  display: "inline-block", borderRadius: 1,
-                }}
-              />
+              <span style={{
+                width: 8, height: 2, background: compareColor,
+                display: "inline-block", borderRadius: 1,
+              }} />
               <span style={{ opacity: 0.7 }}>{compareLabel ?? "comparação"}</span>
               <span style={{ opacity: 0.9 }}>{compareFormat(compare[hover.idx])}</span>
             </div>
           )}
+          {extras && extras.map((e, i) => (
+            <div key={`extra-tt-${i}`} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginTop: 3 }}>
+              <span style={{
+                width: 8, height: 2, background: e.color,
+                display: "inline-block", borderRadius: 1,
+              }} />
+              <span style={{ opacity: 0.7 }}>{e.label}</span>
+              <span style={{ opacity: 0.9 }}>
+                {(e.format ?? ((v: number) => Math.round(v).toLocaleString("pt-BR")))(e.values[hover.idx])}
+              </span>
+            </div>
+          ))}
         </div>
       )}
     </div>
