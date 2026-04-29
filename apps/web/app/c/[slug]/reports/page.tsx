@@ -224,15 +224,15 @@ export default function ReportsPage() {
 
           {/* ── TENDÊNCIA (1 gráfico) ───────────────────────────────── */}
           {series.length > 1 && (
-            <section>
+            <section className="report-page-break-before">
               <SectionHeader
                 num="03"
                 title="Tendência diária"
                 subtitle={primaryConversion ? `Investimento vs. ${primaryConversion.plural.toLowerCase()} ao longo dos ${days} dias` : `Investimento ao longo dos ${days} dias`}
               />
-              {/* Paleta profissional (pronta pra PDF):
-                  - Linha principal: navy profundo (oklch 0.38 0.10 250) — sóbrio, imprime bem
-                  - Compara: terracota queimada — contraste quente sem ser gritante  */}
+              {/* Paleta brand: laranja (--data-orange) primario + violet
+                  (--data-violet) secundario. Saturadas pra render bem em
+                  PDF/tela ao mesmo tempo. */}
               <div style={{
                 background: "var(--surface)",
                 border: "1px solid var(--border)",
@@ -243,14 +243,15 @@ export default function ReportsPage() {
                   display: "flex", gap: 24, marginBottom: 16, fontSize: 11,
                   fontFamily: "var(--font-mono)", color: "var(--ink-2)", letterSpacing: 0.3,
                   textTransform: "uppercase", fontWeight: 600,
+                  flexWrap: "wrap",
                 }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 16, height: 3, background: "oklch(0.38 0.10 250)", borderRadius: 1 }} />
+                    <span style={{ width: 16, height: 3, background: "var(--data-orange)", borderRadius: 1 }} />
                     Investimento <span style={{ color: "var(--ink-4)", fontWeight: 400, textTransform: "none" }}>(eixo esquerdo)</span>
                   </span>
                   {primaryConversion && convSeries.length > 0 && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ width: 16, height: 2, background: "repeating-linear-gradient(90deg, oklch(0.52 0.16 35) 0 5px, transparent 5px 9px)" }} />
+                      <span style={{ width: 16, height: 3, background: "var(--data-violet)", borderRadius: 1 }} />
                       {primaryConversion.plural} <span style={{ color: "var(--ink-4)", fontWeight: 400, textTransform: "none" }}>(eixo direito)</span>
                     </span>
                   )}
@@ -265,9 +266,9 @@ export default function ReportsPage() {
                   compareLabel={primaryConversion?.plural}
                   compareFormat={(v) => Math.round(v).toLocaleString("pt-BR")}
                   height={240}
-                  lineColor="oklch(0.38 0.10 250)"
-                  fillColor="oklch(0.38 0.10 250 / 0.10)"
-                  compareColor="oklch(0.52 0.16 35)"
+                  lineColor="var(--data-orange)"
+                  fillColor="oklch(0.74 0.20 50 / 0.16)"
+                  compareColor="var(--data-violet)"
                   axisColor="var(--ink-3)"
                   gridColor="var(--border)"
                 />
@@ -321,7 +322,7 @@ export default function ReportsPage() {
 
           {/* ── FUNIL (se tiver compras ou leads) ──────────────── */}
           {fn.length > 0 && fn.some((s) => s.value > 0) && (
-            <section>
+            <section className="report-page-break-before">
               <SectionHeader num="04" title="Funil de conversão" subtitle="Do impacto à ação" />
               <div style={{ display: "grid", gap: 4, background: "var(--surface-2)", padding: 18, borderRadius: 12 }}>
                 {fn.map((s, i) => {
@@ -407,48 +408,104 @@ export default function ReportsPage() {
             display: none !important;
           }
 
-          /* 3. Reset do layout pra ocupar pagina inteira */
+          /* 3. Reset do layout pra ocupar pagina inteira A4 */
           html, body {
             background: #fff !important;
             margin: 0 !important;
             padding: 0 !important;
+            color: #000 !important;
           }
-          .app {
+          .app, .app[data-sidebar] {
             display: block !important;
+            grid-template-columns: 1fr !important;
+            height: auto !important;
+            overflow: visible !important;
           }
           .main, .page {
             padding: 0 !important;
             margin: 0 !important;
             max-width: 100% !important;
             width: 100% !important;
-          }
-          .app[data-sidebar] {
-            grid-template-columns: 1fr !important;
+            overflow: visible !important;
           }
 
-          /* 4. Documento do relatorio preenche a pagina */
+          /* 4. Container do relatorio: ocupa A4 com margens compensadas pelo @page */
           .report-doc {
             border: none !important;
             padding: 0 !important;
             max-width: 100% !important;
+            width: 100% !important;
             margin: 0 !important;
+            display: block !important;
           }
-          .report-doc > section:first-child,
+
+          /* 5. Hero compacto pra PDF (era 56px → 28px padding-top) */
           .report-hero {
             border-radius: 0 !important;
+            padding: 28px 32px 24px !important;
+            page-break-after: avoid !important;
           }
+          .report-hero h1 {
+            font-size: 32px !important;
+            margin-bottom: 6px !important;
+          }
+          .report-hero > div:last-child {
+            font-size: 16px !important;
+            margin-top: 20px !important;
+          }
+
+          /* 6. Corpo do relatorio: padding compacto */
           .report-doc > div:last-child {
             border: none !important;
             border-radius: 0 !important;
+            padding: 24px 32px !important;
+            gap: 24px !important;
           }
 
-          /* 5. Evitar quebra de pagina dentro de secoes */
-          section { break-inside: avoid; page-break-inside: avoid; }
+          /* 7. Page break controls — cada secao tenta caber numa pagina, mas
+                tambem permite quebra interna se for muito grande (era avoid
+                rigido que cortava conteudo) */
+          section {
+            break-inside: auto !important;
+            page-break-inside: auto !important;
+            margin-top: 0 !important;
+          }
+          /* Secoes especificas que devem comecar em pagina nova */
+          section.report-page-break-before {
+            page-break-before: always !important;
+            break-before: page !important;
+          }
+          /* KPIs, charts, funnel: tentar nao cortar no meio */
+          section h2 + div,
+          .grid {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+          }
 
-          /* 6. Ajustes de pagina A4 */
+          /* 8. SVGs (graficos) escalam pra largura disponivel */
+          .report-doc svg {
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+          }
+          /* BigChart wrap precisa de altura explicita pra ResizeObserver
+             nao colapsar pra zero em print */
+          .report-doc [style*="position: relative"][style*="height"] {
+            min-height: 220px;
+          }
+
+          /* 9. Ajustes de pagina A4 */
           @page {
             size: A4;
-            margin: 12mm 10mm;
+            margin: 12mm 12mm;
+          }
+          @page :first {
+            margin: 0;
+          }
+
+          /* 10. Forcar visibilidade — overflow hidden em ancestrais corta PDF */
+          html, body, .app, .main, .page, .report-doc {
+            overflow: visible !important;
           }
         }
       `}</style>

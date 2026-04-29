@@ -122,7 +122,13 @@ export function BigChart({
 
   return (
     <div ref={wrap} style={{ position: "relative", height }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-      <svg width={w} height={height} style={{ display: "block" }}>
+      <svg
+        width={w}
+        height={height}
+        viewBox={`0 0 ${w} ${height}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{ display: "block", maxWidth: "100%" }}
+      >
         <defs>
           {/* Fill gradient: line color at top (32% opacity) → transparent at bottom.
               Plus a subtle horizontal sheen for the "fluid" Cryptox-style fill. */}
