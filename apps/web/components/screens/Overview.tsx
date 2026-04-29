@@ -363,7 +363,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       { label: "Investimento", value: "—", unit: "BRL", delta: 0, series: emptySeries, format: fmtBRL },
       { label: "Mensagens", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
       { label: "Leads", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
-      { label: "Compras", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
+      { label: "Vendas", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
       { label: "Faturamento", value: "—", unit: "BRL", delta: 0, series: emptySeries, format: fmtBRL },
       { label: "ROAS", value: "—", unit: "x", delta: 0, series: emptySeries, format: (v) => v.toFixed(2) + "x" },
       { label: "Impressões", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
@@ -379,8 +379,23 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
   const purchaseSeries = series.map((p) => p.purchases);
   const impSeries = series.map((p) => p.impressions);
   const clkSeries = series.map((p) => p.clicks);
-  // Faturamento: receita diaria. Sparkline so aparece se houver receita agregada,
-  // pra evitar linha plana no zero pra clientes sem tracking.
+  // Trackcore como fonte preferencial pra Faturamento + Compras.
+  // Backend retorna manual_revenue/manual_purchases que JA estao somados em
+  // revenue/purchases (totais). Quando Trackcore tem dado, usamos o valor manual
+  // como ground-truth (mais confiavel que Pixel da Meta).
+  const trackcoreRevenue = o.manual_revenue ?? 0;
+  const trackcorePurchases = o.manual_purchases ?? 0;
+  const usingTrackcoreRevenue = trackcoreRevenue > 0;
+  const usingTrackcoreSales = trackcorePurchases > 0;
+  const effectiveRevenue = usingTrackcoreRevenue ? trackcoreRevenue : o.revenue;
+  const effectivePurchases = usingTrackcoreSales ? trackcorePurchases : o.purchases;
+  const effectiveCpp = effectivePurchases > 0 ? o.spend / effectivePurchases : 0;
+  const effectiveRoas = effectiveRevenue > 0 && o.spend > 0
+    ? effectiveRevenue / o.spend
+    : o.roas;
+
+  // Faturamento: receita diaria. Sparkline usa daily total revenue (backend
+  // nao tem breakdown manual por dia). Vazio pra clientes sem qualquer receita.
   const totalRevenue = series.reduce((s, p) => s + (p.revenue || 0), 0);
   const revenueSeries: number[] = totalRevenue > 0
     ? series.map((p) => p.revenue || 0)
@@ -394,7 +409,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
   const ctrSeries = series.map((p) => (p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0));
 
   const d = o.deltas;
-  const roasLabel = o.roas > 0 ? `${o.roas.toFixed(2)}x` : "—";
+  const roasLabel = effectiveRoas > 0 ? `${effectiveRoas.toFixed(2)}x` : "—";
 
   return [
     {
@@ -422,26 +437,32 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       format: (v) => Math.round(v).toLocaleString("pt-BR"),
     },
     {
-      label: o.purchases > 0 ? `Compras · R$${o.cost_per_purchase.toFixed(2)}/compra` : "Compras",
-      value: fmtIntCompact(o.purchases),
+      // Trackcore preferido — quando ha vendas manuais, mostra "via Trackcore"
+      // e usa effectivePurchases. Senao cai pra contagem da Meta (Pixel).
+      label: effectivePurchases > 0
+        ? (usingTrackcoreSales
+            ? `Vendas · R$${effectiveCpp.toFixed(2)}/venda · via Trackcore`
+            : `Vendas · R$${effectiveCpp.toFixed(2)}/venda`)
+        : (usingTrackcoreSales ? "Vendas · via Trackcore" : "Vendas"),
+      value: fmtIntCompact(effectivePurchases),
       unit: "",
-      delta: d.purchases ?? 0,
+      delta: usingTrackcoreSales ? 0 : (d.purchases ?? 0),
       series: purchaseSeries,
       format: (v) => Math.round(v).toLocaleString("pt-BR"),
     },
     {
-      label: "Faturamento",
-      value: o.revenue > 0 ? fmtBRL(o.revenue) : "—",
+      label: usingTrackcoreRevenue ? "Faturamento · via Trackcore" : "Faturamento",
+      value: effectiveRevenue > 0 ? fmtBRL(effectiveRevenue) : "—",
       unit: "BRL",
-      delta: d.revenue ?? 0,
+      delta: usingTrackcoreRevenue ? 0 : (d.revenue ?? 0),
       series: revenueSeries, // vazio quando nao ha tracking → esconde sparkline
       format: fmtBRL,
     },
     {
-      label: "ROAS",
+      label: usingTrackcoreRevenue ? "ROAS · via Trackcore" : "ROAS",
       value: roasLabel,
       unit: "x",
-      delta: d.roas ?? 0,
+      delta: usingTrackcoreRevenue ? 0 : (d.roas ?? 0),
       series: roasSeries, // vazio quando não há receita → sparkline escondido
       format: (v) => v.toFixed(2) + "x",
     },
