@@ -6,6 +6,7 @@ import { differenceInDays, format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
 import { BigChart } from "@/components/primitives/BigChart";
+import { DataIntegrityBanner } from "@/components/DataIntegrityBanner";
 import { Delta } from "@/components/primitives/Delta";
 import { PlatChip } from "@/components/primitives/PlatChip";
 import { Sparkline } from "@/components/primitives/Sparkline";
@@ -193,6 +194,10 @@ export function Overview() {
           </div>
         </div>
       )}
+
+      {/* Auto-detecta divergencia Trackcore × Pixel × atividade.
+          Renderiza so quando ha problema; nao polui a tela quando dados batem. */}
+      <DataIntegrityBanner data={overviewQ.data} />
 
       <div className="sec-head">
         <span className="num">SEÇÃO 01</span>
