@@ -384,15 +384,31 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
   const purchaseSeries = series.map((p) => p.purchases);
   const impSeries = series.map((p) => p.impressions);
   const clkSeries = series.map((p) => p.clicks);
-  // Trackcore como fonte preferencial pra Faturamento + Compras.
-  // Backend retorna manual_revenue/manual_purchases que JA estao somados em
-  // revenue/purchases (totais). Quando Trackcore tem dado, usamos o valor manual
-  // como ground-truth (mais confiavel que Pixel da Meta).
+  // Selecao inteligente da fonte de Faturamento/Vendas.
+  //
+  // Trackcore eh GROUND TRUTH quando funciona (mensagem chave detecta venda
+  // real com valor real). Mas as vezes esta under-reporting:
+  //   - vendedor esquece a mensagem chave
+  //   - webhook nao dispara pra todos os tipos
+  //   - configuracao diferente por cliente
+  //
+  // Em vez de cegar no Trackcore, comparamos com Pixel e usamos a fonte mais
+  // razoavel:
+  //   - Trackcore >= 40% da receita do Pixel: confiavel, usa Trackcore
+  //   - Trackcore < 40% e Pixel > 100: Pixel mais confiavel (Trackcore capta
+  //     fracao das vendas — banner explica e sugere acao)
+  //   - Pixel zero e Trackcore zero: nada a mostrar
   const trackcoreRevenue = o.manual_revenue ?? 0;
   const trackcorePurchases = o.manual_purchases ?? 0;
-  const usingTrackcoreRevenue = trackcoreRevenue > 0;
-  const usingTrackcoreSales = trackcorePurchases > 0;
-  const effectiveRevenue = usingTrackcoreRevenue ? trackcoreRevenue : o.revenue;
+  const pixelRevenue = o.revenue;
+  const trackcoreCoverage = pixelRevenue > 0 ? trackcoreRevenue / pixelRevenue : 0;
+  const trackcoreLooksReliable =
+    trackcoreRevenue > 0 &&
+    (trackcoreCoverage >= 0.4 || pixelRevenue < 100);
+
+  const usingTrackcoreRevenue = trackcoreLooksReliable;
+  const usingTrackcoreSales = trackcorePurchases > 0 && usingTrackcoreRevenue;
+  const effectiveRevenue = usingTrackcoreRevenue ? trackcoreRevenue : pixelRevenue;
   const effectivePurchases = usingTrackcoreSales ? trackcorePurchases : o.purchases;
   const effectiveCpp = effectivePurchases > 0 ? o.spend / effectivePurchases : 0;
   const effectiveRoas = effectiveRevenue > 0 && o.spend > 0
