@@ -196,8 +196,9 @@ export function Overview() {
       )}
 
       {/* Auto-detecta divergencia Trackcore × Pixel × atividade.
-          Renderiza so quando ha problema; nao polui a tela quando dados batem. */}
-      <DataIntegrityBanner data={overviewQ.data} />
+          Renderiza so quando ha problema; nao polui a tela quando dados batem.
+          Quando endpoint backend retorna, usa analise profunda; senao frontend. */}
+      <DataIntegrityBanner data={overviewQ.data} clientSlug={slug} />
 
       <div className="sec-head">
         <span className="num">SEÇÃO 01</span>

@@ -180,6 +180,40 @@ function rangeQuery(o: RangeOpts): string {
 export const metaOverview = (slug: string, opts: RangeOpts = {}) =>
   get<MetaOverview>(`/api/clients/${slug}/meta/overview?${rangeQuery(opts)}`);
 
+// ── Trackcore health ─────────────────────────────────────────────────────
+export type TrackcoreHealthIssue = {
+  code: string;
+  severity: "high" | "medium" | "low";
+  title: string;
+  detail: string;
+  action: string;
+};
+
+export type TrackcoreHealthMetrics = {
+  events_30d: number;
+  purchases: number;
+  leads: number;
+  leads_with_value: number;
+  messages: number;
+  purchases_revenue: number;
+  leads_revenue: number;
+  last_purchase_date: string | null;
+  last_event_date: string | null;
+  purchase_value_distribution: Record<string, number>;
+  lead_value_distribution: Record<string, number>;
+};
+
+export type TrackcoreHealth = {
+  status: "healthy" | "degraded" | "broken" | "inactive";
+  issues: TrackcoreHealthIssue[];
+  metrics: TrackcoreHealthMetrics;
+  client_slug: string;
+  checked_at: string;
+};
+
+export const trackcoreHealth = (slug: string) =>
+  get<TrackcoreHealth>(`/api/integrations/clients/${slug}/trackcore/health`);
+
 export const metaCampaigns = (slug: string, opts: RangeOpts = {}) =>
   get<MetaCampaignsResponse>(`/api/clients/${slug}/meta/campaigns?${rangeQuery(opts)}`);
 

@@ -1,44 +1,33 @@
 "use client";
-import type { MetaOverview } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+
+import { type MetaOverview, type TrackcoreHealthIssue, trackcoreHealth } from "@/lib/api";
 
 /**
  * Banner que detecta automaticamente discrepancias entre Meta Pixel + Trackcore.
  * Aparece SO quando ha problema; se tudo bate, fica invisivel.
  *
- * Heuristicas:
- *   - High: gasto + atividade WhatsApp mas zero vendas registradas
- *           (provavel: webhook de venda do Trackcore nao dispara)
- *   - Medium: Pixel reporta receita mas Trackcore nao captura
- *             (provavel: vendedor esquecendo mensagem chave)
- *   - Medium: Trackcore captura muito menos que Pixel
- *             (subset das vendas tem mensagem chave)
+ * Combina duas fontes de diagnostico:
+ *   1. Backend (`/integrations/clients/{slug}/trackcore/health`): analise
+ *      profunda da tabela manual_conversions (deteccao de placeholders,
+ *      vendas stale, configuracao quebrada, etc).
+ *   2. Frontend heuristics (do MetaOverview): comparacao Pixel × Trackcore.
+ *
+ * O backend prevalece quando disponivel; frontend eh fallback quando o
+ * endpoint nao retornou ou o cliente ainda nao foi analisado.
  */
-type Issue = {
-  severity: "high" | "medium";
-  title: string;
-  detail: string;
-  action: string;
-};
 
-function diagnose(o: MetaOverview): Issue[] {
+type Issue = TrackcoreHealthIssue;
+
+function frontendDiagnose(o: MetaOverview): Issue[] {
   const issues: Issue[] = [];
   const manual = o.manual_revenue ?? 0;
-  const manualP = o.manual_purchases ?? 0;
   const conversas = o.messages + o.leads;
 
-  // Caso 1: tem volume + dinheiro mas ZERO vendas via Trackcore
-  if (o.spend > 50 && manualP === 0 && conversas > 5) {
-    issues.push({
-      severity: "high",
-      title: "Vendas Trackcore não estão chegando",
-      detail: `Investimento de R$ ${o.spend.toFixed(2)} gerou ${conversas} conversas/leads no WhatsApp, mas zero vendas foram detectadas pelo Trackcore (via mensagem chave) no período. O webhook de venda detectada provavelmente não está disparando.`,
-      action: "Verificar config no Trackcore: cliente Comtex tem webhook de evento 'venda' habilitado apontando pro Pulse?",
-    });
-  }
-
-  // Caso 2: Pixel detectou receita, Trackcore zerado
+  // Caso: Pixel reporta receita mas Trackcore zerado
   if (o.revenue > 100 && manual === 0 && o.spend > 50) {
     issues.push({
+      code: "frontend_pixel_only",
       severity: "medium",
       title: "Pixel Meta detectou venda, Trackcore não",
       detail: `Receita atribuída pelo Pixel da Meta: R$ ${o.revenue.toFixed(2)}. Pelo Trackcore (mensagem chave): R$ 0,00. Vendedor pode estar esquecendo de enviar a mensagem chave após fechar venda.`,
@@ -46,10 +35,11 @@ function diagnose(o: MetaOverview): Issue[] {
     });
   }
 
-  // Caso 3: Trackcore captura mas eh fração do que o Pixel ve
+  // Caso: Trackcore captura mas eh fração do que o Pixel ve
   if (o.revenue > 1000 && manual > 0 && manual / o.revenue < 0.4) {
     const pct = ((manual / o.revenue) * 100).toFixed(0);
     issues.push({
+      code: "frontend_trackcore_partial",
       severity: "medium",
       title: "Trackcore divergente do Pixel",
       detail: `Pixel reporta R$ ${o.revenue.toFixed(2)}. Trackcore só ${pct}% disso (R$ ${manual.toFixed(2)}). Algumas vendas estão escapando da detecção via mensagem chave.`,
@@ -57,18 +47,56 @@ function diagnose(o: MetaOverview): Issue[] {
     });
   }
 
+  // Caso: tem volume + dinheiro mas ZERO vendas via Trackcore
+  if (o.spend > 50 && (o.manual_purchases ?? 0) === 0 && conversas > 5) {
+    issues.push({
+      code: "frontend_no_sales",
+      severity: "high",
+      title: "Vendas Trackcore não estão chegando",
+      detail: `Investimento de R$ ${o.spend.toFixed(2)} gerou ${conversas} conversas/leads no WhatsApp, mas zero vendas detectadas pelo Trackcore (via mensagem chave) no período.`,
+      action: "Verificar config no Trackcore: cliente tem webhook de evento 'venda' habilitado apontando pro Pulse?",
+    });
+  }
+
   return issues;
 }
 
-export function DataIntegrityBanner({ data }: { data: MetaOverview | undefined }) {
-  if (!data) return null;
-  const issues = diagnose(data);
+function severityColor(sev: "high" | "medium" | "low") {
+  if (sev === "high") return { color: "var(--neg)", bg: "var(--neg-fill)" };
+  if (sev === "medium") return { color: "var(--warn)", bg: "var(--warn-fill)" };
+  return { color: "var(--info)", bg: "var(--info-fill)" };
+}
+
+export function DataIntegrityBanner({
+  data,
+  clientSlug,
+}: {
+  data: MetaOverview | undefined;
+  clientSlug?: string;
+}) {
+  // Backend deep analysis — tem prioridade quando disponivel
+  const healthQ = useQuery({
+    queryKey: ["trackcore-health", clientSlug],
+    queryFn: () => trackcoreHealth(clientSlug!),
+    enabled: !!clientSlug,
+    staleTime: 60_000,  // 1 min cache
+    retry: false,        // se endpoint falhar, cai pra frontend heuristics
+  });
+
+  // Decide qual conjunto de issues usar
+  const issues: Issue[] = healthQ.data?.issues
+    ?? (data ? frontendDiagnose(data) : []);
+
   if (issues.length === 0) return null;
 
-  const worst = issues.some((i) => i.severity === "high") ? "high" : "medium";
-  const tone = worst === "high"
-    ? { color: "var(--neg)", bg: "var(--neg-fill)", border: "var(--neg)" }
-    : { color: "var(--warn)", bg: "var(--warn-fill)", border: "var(--warn)" };
+  const worstSev = issues.some((i) => i.severity === "high") ? "high" : "medium";
+  const tone = severityColor(worstSev);
+
+  // Sub-titulo com contexto extra do backend
+  const ctx = healthQ.data?.metrics;
+  const ctxLine = ctx
+    ? `${ctx.events_30d} eventos · ${ctx.purchases} venda${ctx.purchases !== 1 ? "s" : ""} · última: ${ctx.last_purchase_date ?? "nunca"}`
+    : null;
 
   return (
     <div
@@ -82,7 +110,7 @@ export function DataIntegrityBanner({ data }: { data: MetaOverview | undefined }
         position: "relative",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
         <span style={{
           width: 8, height: 8, borderRadius: "50%",
           background: tone.color,
@@ -94,35 +122,46 @@ export function DataIntegrityBanner({ data }: { data: MetaOverview | undefined }
         }}>
           Verificação automática · {issues.length} {issues.length === 1 ? "alerta" : "alertas"}
         </span>
+        {ctxLine && (
+          <span className="mono" style={{
+            fontSize: 10, color: "var(--ink-4)", letterSpacing: 0.4,
+            marginLeft: "auto",
+          }}>
+            {ctxLine}
+          </span>
+        )}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {issues.map((i, idx) => (
-          <div key={idx}>
-            <div style={{
-              fontSize: 14, fontWeight: 600, color: "var(--ink)",
-              marginBottom: 4,
-            }}>
-              {i.title}
+        {issues.map((i, idx) => {
+          const itone = severityColor(i.severity);
+          return (
+            <div key={idx}>
+              <div style={{
+                fontSize: 14, fontWeight: 600, color: "var(--ink)",
+                marginBottom: 4,
+              }}>
+                {i.title}
+              </div>
+              <div style={{
+                fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5,
+                marginBottom: 6,
+              }}>
+                {i.detail}
+              </div>
+              <div style={{
+                fontSize: 12, color: "var(--ink-3)", lineHeight: 1.4,
+                display: "flex", alignItems: "flex-start", gap: 6,
+                padding: "8px 10px",
+                background: "rgba(255,255,255,0.03)",
+                borderRadius: 8,
+                borderLeft: `2px solid ${itone.color}`,
+              }}>
+                <span style={{ color: itone.color, fontWeight: 600 }}>→</span>
+                <span>{i.action}</span>
+              </div>
             </div>
-            <div style={{
-              fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5,
-              marginBottom: 6,
-            }}>
-              {i.detail}
-            </div>
-            <div style={{
-              fontSize: 12, color: "var(--ink-3)", lineHeight: 1.4,
-              display: "flex", alignItems: "flex-start", gap: 6,
-              padding: "8px 10px",
-              background: "rgba(255,255,255,0.03)",
-              borderRadius: 8,
-              borderLeft: `2px solid ${tone.color}`,
-            }}>
-              <span style={{ color: tone.color, fontWeight: 600 }}>→</span>
-              <span>{i.action}</span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
