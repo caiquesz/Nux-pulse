@@ -652,7 +652,8 @@ button {
    2. backdrop-filter blur+saturate to pick up ambient color from .stage-glow
    3. Inner highlight (top hairline) via box-shadow inset
    4. Outer drop shadow + subtle rim
-   The subtle rim and inner highlight are what make it read as "glass" not "card". */
+   Hover applies a micro Y-lift (-1px) + intensified glow. cubic-bezier(.2,.8,.2,1)
+   gives a "settle" feel that's more refined than linear ease. */
 .card {
   background:
     linear-gradient(180deg,
@@ -671,18 +672,27 @@ button {
     0 24px 48px -16px rgba(0,0,0,0.6),
     0 8px 16px -8px rgba(0,0,0,0.3);
   transition:
-    border-color 200ms ease,
-    transform 200ms ease,
-    box-shadow 200ms ease;
+    border-color 280ms cubic-bezier(.2,.8,.2,1),
+    transform 280ms cubic-bezier(.2,.8,.2,1),
+    box-shadow 280ms cubic-bezier(.2,.8,.2,1),
+    background 280ms cubic-bezier(.2,.8,.2,1);
 }
 .card:hover {
+  transform: translateY(-1px);
   border-color: rgba(255,255,255,0.10);
-  border-top-color: rgba(255,255,255,0.18);
+  border-top-color: rgba(255,255,255,0.20);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.10),
-    0 1px 0 rgba(255,255,255,0.03),
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 1px 0 rgba(255,255,255,0.04),
     0 32px 64px -16px rgba(0,0,0,0.7),
-    0 12px 24px -8px rgba(0,0,0,0.4);
+    0 16px 32px -8px rgba(0,0,0,0.4),
+    0 0 32px -12px oklch(0.72 0.20 50 / 0.18);  /* faint orange ambient glow */
+}
+/* Cards inside a Link/button — preserve hover from parent .card and add chevron lift */
+a.card:hover .row-chevron,
+button.card:hover .row-chevron {
+  color: var(--ink-2);
+  transform: translateX(2px);
 }
 .card.tight { padding: 0; overflow: hidden; }
 .card-head {
@@ -1449,4 +1459,73 @@ button {
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Stagger fade-up entry — for lists of cards/rows.
+   Apply to a container's children. Each child gets a slightly delayed
+   fade-up. Capped at 12 children to avoid CPU cost on long lists. */
+.stagger-fade-up > * {
+  animation: fadeUp 380ms cubic-bezier(.2,.8,.2,1) both;
+  opacity: 0;
+}
+.stagger-fade-up > *:nth-child(1)  { animation-delay: 0ms;   }
+.stagger-fade-up > *:nth-child(2)  { animation-delay: 35ms;  }
+.stagger-fade-up > *:nth-child(3)  { animation-delay: 70ms;  }
+.stagger-fade-up > *:nth-child(4)  { animation-delay: 105ms; }
+.stagger-fade-up > *:nth-child(5)  { animation-delay: 140ms; }
+.stagger-fade-up > *:nth-child(6)  { animation-delay: 175ms; }
+.stagger-fade-up > *:nth-child(7)  { animation-delay: 210ms; }
+.stagger-fade-up > *:nth-child(8)  { animation-delay: 245ms; }
+.stagger-fade-up > *:nth-child(9)  { animation-delay: 280ms; }
+.stagger-fade-up > *:nth-child(10) { animation-delay: 315ms; }
+.stagger-fade-up > *:nth-child(11) { animation-delay: 350ms; }
+.stagger-fade-up > *:nth-child(12) { animation-delay: 385ms; }
+/* Beyond 12, all share the last delay — no point making the user wait longer */
+.stagger-fade-up > *:nth-child(n+13) { animation-delay: 385ms; }
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .stagger-fade-up > * {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ── Row chevron — animated indicator inside list-card rows.
+   Translates +2px on parent .card hover (defined in .card hover rule). */
+.row-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-4);
+  transition:
+    color 240ms cubic-bezier(.2,.8,.2,1),
+    transform 240ms cubic-bezier(.2,.8,.2,1);
+}
+
+/* ── Sparkline draw-in animation — line strokes from start to end on mount.
+   stroke-dasharray of 4000 covers any reasonable sparkline length. The dashoffset
+   shifts from 4000 (invisible, all gap) to 0 (fully drawn). */
+@keyframes sparkLineDraw {
+  from { stroke-dashoffset: 4000; }
+  to   { stroke-dashoffset: 0; }
+}
+.spark-line-anim {
+  stroke-dasharray: 4000;
+  stroke-dashoffset: 4000;
+  animation: sparkLineDraw 1100ms cubic-bezier(.2,.8,.2,1) 80ms forwards;
+}
+@keyframes sparkAreaFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.spark-area-anim {
+  opacity: 0;
+  animation: sparkAreaFade 800ms cubic-bezier(.2,.8,.2,1) 600ms forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spark-line-anim, .spark-area-anim {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
 }

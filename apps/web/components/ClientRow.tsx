@@ -41,16 +41,7 @@ export function ClientRow({ row }: { row: ClientPortfolioRow }) {
         padding: "14px 16px",
         textDecoration: "none",
         color: "var(--ink)",
-        transition: "background 120ms ease-out, border-color 120ms ease-out",
         position: "relative",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.background = "var(--surface-2)";
-        e.currentTarget.style.borderColor = "var(--border-2)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = "";
-        e.currentTarget.style.borderColor = "";
       }}
     >
       {/* col 1: accent dot + nome + nicho */}
@@ -165,8 +156,13 @@ export function ClientRow({ row }: { row: ClientPortfolioRow }) {
         )}
       </div>
 
-      {/* col 7: chevron */}
-      <span aria-hidden="true" style={{ color: "var(--ink-4)", fontSize: 14 }}>›</span>
+      {/* col 7: chevron — animated via .row-chevron + parent .card:hover */}
+      <span aria-hidden="true" className="row-chevron" style={{ width: 16, height: 16 }}>
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5"
+                strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
     </Link>
   );
 }

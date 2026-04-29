@@ -376,7 +376,7 @@ function CommandCenter() {
               </div>
             )}
             {data && data.clients.length > 0 && (
-              <section style={{ display: "grid", gap: 8 }}>
+              <section className="stagger-fade-up" style={{ display: "grid", gap: 8 }}>
                 {sortedClients.map((c) => (
                   <ClientRow key={c.slug} row={c} />
                 ))}

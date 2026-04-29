@@ -83,9 +83,19 @@ export function Sparkline({
             ))
           : (
             <>
-              {style !== "line" && <path d={area} fill={`url(#${gradId})`} />}
+              {style !== "line" && (
+                <path d={area} fill={`url(#${gradId})`} className="spark-area-anim" />
+              )}
               {cmp && <path d={cmp.line} fill="none" stroke="var(--chart-line-2)" strokeWidth={1.25} strokeDasharray="3 3" />}
-              <path d={line} fill="none" stroke="var(--chart-line)" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" />
+              <path
+                d={line}
+                fill="none"
+                stroke="var(--chart-line)"
+                strokeWidth={1.75}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="spark-line-anim"
+              />
             </>
           )}
 
