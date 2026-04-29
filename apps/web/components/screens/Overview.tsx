@@ -34,6 +34,9 @@ export function Overview() {
   const slug = params.slug;
   const [periodKey, setPeriodKey] = useState<PeriodKey>("30d");
   const [custom, setCustom] = useState<DateRange | undefined>(undefined);
+  // Periodo de comparacao customizavel. Quando setado, sobrepoe o
+  // previous_period default do backend e busca metricas no range escolhido.
+  const [customCompare, setCustomCompare] = useState<DateRange | undefined>(undefined);
 
   // Se tem range custom, usa ele; senão, usa o preset
   const rangeOpts: RangeOpts = useMemo(() => {
@@ -90,7 +93,29 @@ export function Overview() {
     enabled: !!slug,
   });
 
-  const kpis = useMemo(() => buildKpis(overviewQ.data, dailyQ.data), [overviewQ.data, dailyQ.data]);
+  // Compare period customizado — busca metricas no range escolhido pra usar
+  // como "previous" em vez do previous_period default. So roda quando o
+  // user setou ambos os limites (from + to).
+  const customCompareOpts: RangeOpts | null = useMemo(() => {
+    if (customCompare?.from && customCompare?.to) {
+      return {
+        since: format(customCompare.from, "yyyy-MM-dd"),
+        until: format(customCompare.to, "yyyy-MM-dd"),
+      };
+    }
+    return null;
+  }, [customCompare]);
+
+  const compareQ = useQuery<MetaOverview>({
+    queryKey: ["meta", "overview-compare", slug, customCompareOpts?.since, customCompareOpts?.until],
+    queryFn: () => metaOverview(slug, customCompareOpts!),
+    enabled: !!slug && !!customCompareOpts,
+  });
+
+  const kpis = useMemo(
+    () => buildKpis(overviewQ.data, dailyQ.data, compareQ.data),
+    [overviewQ.data, dailyQ.data, compareQ.data],
+  );
   const series = useMemo(() => (dailyQ.data?.series ?? []).map((p) => p.spend), [dailyQ.data]);
   // Labels curtos "dd/mm" pra cada ponto — usados no tooltip dos sparklines.
   const dateLabels = useMemo(
@@ -244,11 +269,27 @@ export function Overview() {
         <>
           <div className="sec-head">
             <span className="num">SEÇÃO 02 · COMPARAÇÃO</span>
-            <h3>Período anterior</h3>
+            <h3>{customCompare?.from && customCompare?.to ? "Período personalizado" : "Período anterior"}</h3>
             <span className="hint">
-              {formatRangeBr(overviewQ.data.previous_period.since, overviewQ.data.previous_period.until)}
+              {compareQ.data
+                ? formatRangeBr(compareQ.data.since, compareQ.data.until)
+                : formatRangeBr(overviewQ.data.previous_period.since, overviewQ.data.previous_period.until)}
             </span>
             <div className="rule" />
+            <DateRangePicker
+              value={customCompare}
+              onChange={setCustomCompare}
+            />
+            {customCompare && (
+              <button
+                className="btn ghost"
+                onClick={() => setCustomCompare(undefined)}
+                style={{ padding: "6px 12px", fontSize: 11, minHeight: 30 }}
+                title="Voltar pro período anterior padrão"
+              >
+                Limpar
+              </button>
+            )}
           </div>
           <div className="grid-kpi grid-kpi-prev" style={{ marginBottom: 28 }}>
             {kpis.map((k) => (
@@ -256,7 +297,7 @@ export function Overview() {
                 <div className="stat">
                   <span className="stat-label">{k.label}</span>
                   <span className="stat-value stat-value-prev">
-                    {loading ? "—" : k.prevValue}
+                    {compareQ.isLoading ? "—" : k.prevValue}
                   </span>
                 </div>
               </div>
@@ -405,7 +446,12 @@ type Kpi = {
   format: (v: number) => string;
 };
 
-function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[] {
+function buildKpis(
+  o: MetaOverview | undefined,
+  daily?: MetaDailyResponse,
+  /** Quando presente, substitui o.previous_period (period customizavel pelo user). */
+  compareOverride?: MetaOverview,
+): Kpi[] {
   const emptySeries: number[] = [];
   const noFmt = (v: number) => v.toLocaleString("pt-BR");
   const dash = "—";
@@ -476,7 +522,12 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
   const ctrSeries = series.map((p) => (p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0));
 
   const d = o.deltas;
-  const prev = o.previous_period;
+  // compareOverride (custom range) substitui previous_period default quando
+  // setado. Quando custom esta ativo, deltas server-side nao se aplicam (foram
+  // calculados contra previous_period diferente) — recalculamos client-side via
+  // ratio() abaixo. Por isso, com compareOverride, ignoramos d.* e usamos ratio.
+  const prev = compareOverride ?? o.previous_period;
+  const usingCustomCompare = !!compareOverride;
   const roasLabel = effectiveRoas > 0 ? `${effectiveRoas.toFixed(2)}x` : "—";
 
   // Previous-period values pra comparacao. Quando usingTrackcore* esta ativo,
@@ -503,7 +554,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       value: fmtBRL(o.spend),
       prevValue: fmtBRL(prev.spend),
       unit: "BRL",
-      delta: d.spend ?? ratio(o.spend, prev.spend),
+      delta: usingCustomCompare ? ratio(o.spend, prev.spend) : (d.spend ?? ratio(o.spend, prev.spend)),
       deltaSemantic: "neutral", // gastar mais nao eh bom nem ruim por si só
       series: spendSeries,
       format: fmtBRL,
@@ -513,7 +564,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       value: fmtIntCompact(o.messages),
       prevValue: fmtIntCompact(prev.messages),
       unit: "",
-      delta: d.messages ?? ratio(o.messages, prev.messages),
+      delta: usingCustomCompare ? ratio(o.messages, prev.messages) : (d.messages ?? ratio(o.messages, prev.messages)),
       deltaSemantic: "up_better",
       series: msgSeries,
       format: (v) => fmtIntCompact(Math.round(v)),
@@ -523,7 +574,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       value: fmtIntCompact(o.leads),
       prevValue: fmtIntCompact(prev.leads),
       unit: "",
-      delta: d.leads ?? ratio(o.leads, prev.leads),
+      delta: usingCustomCompare ? ratio(o.leads, prev.leads) : (d.leads ?? ratio(o.leads, prev.leads)),
       deltaSemantic: "up_better",
       series: leadSeries,
       format: (v) => Math.round(v).toLocaleString("pt-BR"),
@@ -567,7 +618,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       value: fmtIntCompact(o.impressions),
       prevValue: fmtIntCompact(prev.impressions),
       unit: "",
-      delta: d.impressions ?? ratio(o.impressions, prev.impressions),
+      delta: usingCustomCompare ? ratio(o.impressions, prev.impressions) : (d.impressions ?? ratio(o.impressions, prev.impressions)),
       deltaSemantic: "up_better",
       series: impSeries,
       format: (v) => fmtIntCompact(Math.round(v)),
@@ -577,7 +628,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       value: fmtIntCompact(o.clicks),
       prevValue: fmtIntCompact(prev.clicks),
       unit: "",
-      delta: d.clicks ?? ratio(o.clicks, prev.clicks),
+      delta: usingCustomCompare ? ratio(o.clicks, prev.clicks) : (d.clicks ?? ratio(o.clicks, prev.clicks)),
       deltaSemantic: "up_better",
       series: clkSeries,
       format: (v) => fmtIntCompact(Math.round(v)),
@@ -587,7 +638,7 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
       value: fmtPct(o.ctr),
       prevValue: fmtPct(prev.ctr),
       unit: "%",
-      delta: d.ctr ?? ratio(o.ctr, prev.ctr),
+      delta: usingCustomCompare ? ratio(o.ctr, prev.ctr) : (d.ctr ?? ratio(o.ctr, prev.ctr)),
       deltaSemantic: "up_better",
       series: ctrSeries,
       format: (v) => fmtPct(v),
