@@ -1442,7 +1442,21 @@ button.card:hover .row-chevron {
 }
 
 /* ─── UTILITY ─── */
-.mono { font-family: var(--font-mono); }
+/* .mono — semantic tag for "this is data/code with column alignment".
+   Now uses Inter (sans) with tabular-nums + lining-nums + clean (non-slashed)
+   zero. Matches Linear/Vercel/Stripe pattern: numbers in sans, alignment via
+   font-feature, NOT actual monospace glyphs (which have slashed zeros that
+   look unprofessional in financial UI). For real code/terminal output, use
+   <code> or <pre> elements which keep their default monospace. */
+.mono {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
+/* Keep <code> and <pre> tags as actual monospace (where slashed zero makes sense) */
+code, pre, kbd, samp {
+  font-family: var(--font-mono);
+}
 .tnum { font-variant-numeric: tabular-nums; }
 .flex { display: flex; }
 .grow { flex: 1; }
