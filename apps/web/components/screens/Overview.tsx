@@ -14,9 +14,9 @@ import { Icon } from "@/components/icons/Icon";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import {
   listJobs,
-  metaOverview, metaCampaigns, metaDaily,
+  metaOverview, metaCampaigns, metaDaily, metaFunnel,
   triggerMetaBackfill,
-  type MetaOverview, type MetaCampaignsResponse, type MetaDailyResponse,
+  type MetaOverview, type MetaCampaignsResponse, type MetaDailyResponse, type MetaFunnelResponse,
   type RangeOpts,
 } from "@/lib/api";
 import { fmtBRL, fmtInt, fmtIntCompact, fmtPct } from "@/lib/fmt";
@@ -125,6 +125,20 @@ export function Overview() {
   const compareDailyQ = useQuery<MetaDailyResponse>({
     queryKey: ["meta", "daily-compare", slug, compareDailyOpts?.since, compareDailyOpts?.until],
     queryFn: () => metaDaily(slug, compareDailyOpts!),
+    enabled: !!slug && !!compareDailyOpts,
+  });
+
+  // Funil — 2 queries: periodo atual + periodo de comparacao.
+  // Mesmas regras de range do compareDailyOpts.
+  const funnelQ = useQuery<MetaFunnelResponse>({
+    queryKey: ["meta", "funnel", ...queryKeyBase],
+    queryFn: () => metaFunnel(slug, rangeOpts),
+    enabled: !!slug,
+  });
+
+  const funnelCompareQ = useQuery<MetaFunnelResponse>({
+    queryKey: ["meta", "funnel-compare", slug, compareDailyOpts?.since, compareDailyOpts?.until],
+    queryFn: () => metaFunnel(slug, compareDailyOpts!),
     enabled: !!slug && !!compareDailyOpts,
   });
 
@@ -339,6 +353,40 @@ export function Overview() {
               </div>
             ))}
           </div>
+
+          {/* Funil de conversao — 2 cards side-by-side, atual (orange) x compare (purple).
+              Layout estatico (sem bars proporcionais ao valor); cada stage eh uma linha
+              com colored stripe seguindo a cor do periodo. */}
+          <div className="sec-head">
+            <span className="num">SEÇÃO 03 · FUNIL DE CONVERSÃO</span>
+            <h3>Etapas — atual × comparação</h3>
+            <div className="rule" />
+          </div>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))",
+            gap: 16,
+            marginBottom: 28,
+          }}>
+            <MiniFunnel
+              data={funnelQ.data}
+              loading={funnelQ.isLoading}
+              title="Período de análise"
+              lineColor="var(--data-orange)"
+              rangeLabel={formatRangeBr(overviewQ.data.since, overviewQ.data.until)}
+            />
+            <MiniFunnel
+              data={funnelCompareQ.data}
+              loading={funnelCompareQ.isLoading}
+              title={customCompare?.from && customCompare?.to ? "Período personalizado" : "Período anterior"}
+              lineColor="var(--data-violet)"
+              rangeLabel={
+                compareQ.data
+                  ? formatRangeBr(compareQ.data.since, compareQ.data.until)
+                  : formatRangeBr(overviewQ.data.previous_period.since, overviewQ.data.previous_period.until)
+              }
+            />
+          </div>
         </>
       )}
 
@@ -498,6 +546,9 @@ function buildKpis(
   if (!o) {
     return [
       { label: "Investimento", value: dash, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "neutral", series: emptySeries, format: fmtBRL },
+      { label: "CPL",          value: dash, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "up_worse", series: emptySeries, format: fmtBRL },
+      { label: "Custo por mensagem", value: dash, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "up_worse", series: emptySeries, format: fmtBRL },
+      { label: "CAC",          value: dash, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "up_worse", series: emptySeries, format: fmtBRL },
       { label: "Mensagens",    value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
       { label: "Leads",        value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
       { label: "Vendas",       value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
@@ -531,6 +582,20 @@ function buildKpis(
     ? prevRows.map((p) => (p.spend > 0 ? (p.revenue || 0) / p.spend : 0))
     : [];
   const prevCtrSeries = prevRows.map((p) => (p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0));
+
+  // Custo-por-X series (CAC, CPL, CPM). Dia com count=0 → custo=0 (sparkline
+  // mostra dip; user entende que sem volume nao tem custo unitario).
+  const cpkSeries = (countSeries: number[]) =>
+    series.map((p, i) => (countSeries[i] > 0 ? p.spend / countSeries[i] : 0));
+  const cplSeries = cpkSeries(leadSeries);
+  const cpmSeries = cpkSeries(msgSeries);
+  const cacSeries = cpkSeries(purchaseSeries);
+
+  const prevCpkSeries = (countSeries: number[]) =>
+    prevRows.map((p, i) => (countSeries[i] > 0 ? p.spend / countSeries[i] : 0));
+  const prevCplSeries = prevCpkSeries(prevLeadSeries);
+  const prevCpmSeries = prevCpkSeries(prevMsgSeries);
+  const prevCacSeries = prevCpkSeries(prevPurchaseSeries);
   // Selecao inteligente da fonte de Faturamento/Vendas.
   //
   // Trackcore eh GROUND TRUTH quando funciona (mensagem chave detecta venda
@@ -611,6 +676,39 @@ function buildKpis(
       delta: ratio(o.spend, prev.spend),
       deltaSemantic: "neutral",
       series: spendSeries,
+      format: fmtBRL,
+    },
+    {
+      label: "CPL",
+      value: o.leads > 0 ? fmtBRL(o.cost_per_lead) : "—",
+      prevValue: prev.leads > 0 ? fmtBRL(prev.cost_per_lead) : "—",
+      prevSeries: prevCplSeries,
+      unit: "BRL",
+      delta: ratio(o.cost_per_lead, prev.cost_per_lead),
+      deltaSemantic: "up_worse",  // CPL maior eh ruim
+      series: cplSeries,
+      format: fmtBRL,
+    },
+    {
+      label: "Custo por mensagem",
+      value: o.messages > 0 ? fmtBRL(o.cost_per_message) : "—",
+      prevValue: prev.messages > 0 ? fmtBRL(prev.cost_per_message) : "—",
+      prevSeries: prevCpmSeries,
+      unit: "BRL",
+      delta: ratio(o.cost_per_message, prev.cost_per_message),
+      deltaSemantic: "up_worse",
+      series: cpmSeries,
+      format: fmtBRL,
+    },
+    {
+      label: "CAC",
+      value: effectivePurchases > 0 ? fmtBRL(effectiveCpp) : "—",
+      prevValue: prev.purchases > 0 ? fmtBRL(prev.cost_per_purchase) : "—",
+      prevSeries: prevCacSeries,
+      unit: "BRL",
+      delta: ratio(effectiveCpp, prev.cost_per_purchase),
+      deltaSemantic: "up_worse",
+      series: cacSeries,
       format: fmtBRL,
     },
     {
@@ -781,6 +879,100 @@ function statusDot(s: string | null): "on" | "warn" | "off" {
   if (up === "ACTIVE") return "on";
   if (up === "PAUSED" || up === "CAMPAIGN_PAUSED" || up === "ADSET_PAUSED") return "off";
   return "warn";
+}
+
+/**
+ * MiniFunnel — render compacto de funil de conversao usado no Overview.
+ * Layout ESTATICO (nao tem barras proporcionais ao valor) — cada stage
+ * eh uma linha igual com colored stripe (lineColor) na lateral. Usado em
+ * pares: atual (orange) e comparacao (purple).
+ */
+function MiniFunnel({
+  data,
+  loading,
+  title,
+  lineColor,
+  rangeLabel,
+}: {
+  data: MetaFunnelResponse | undefined;
+  loading: boolean;
+  title: string;
+  lineColor: string;
+  rangeLabel: string;
+}) {
+  const stages = data?.stages ?? [];
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div style={{
+        display: "flex", justifyContent: "space-between",
+        alignItems: "baseline", marginBottom: 14, gap: 12,
+      }}>
+        <div className="card-title" style={{ color: lineColor, letterSpacing: 0.2 }}>
+          {title}
+        </div>
+        <div className="card-sub" style={{ margin: 0 }}>{rangeLabel}</div>
+      </div>
+      {loading && stages.length === 0 ? (
+        <div style={{ color: "var(--ink-3)", padding: "24px 8px", fontSize: 13 }}>
+          Carregando…
+        </div>
+      ) : stages.length === 0 ? (
+        <div style={{ color: "var(--ink-4)", padding: "24px 8px", fontSize: 12 }}>
+          Sem dados no período
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {stages.map((s, i) => (
+            <div
+              key={s.key}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr auto auto",
+                gap: 12,
+                alignItems: "center",
+                padding: "10px 12px",
+                background: "rgba(255,255,255,0.02)",
+                borderRadius: 8,
+                borderLeft: `2px solid ${lineColor}`,
+              }}
+            >
+              <span style={{ fontSize: 12, color: "var(--ink)", fontWeight: 500 }}>
+                {s.label}
+              </span>
+              <span className="mono" style={{
+                fontWeight: 700,
+                fontSize: 14,
+                fontVariantNumeric: "tabular-nums",
+                color: "var(--ink)",
+                minWidth: 60,
+                textAlign: "right",
+              }}>
+                {fmtInt(s.value)}
+              </span>
+              {s.conversion_from_prev !== null && i > 0 ? (
+                <span className="mono" style={{
+                  fontSize: 10,
+                  color: "var(--ink-3)",
+                  letterSpacing: 0.3,
+                  minWidth: 56,
+                  textAlign: "right",
+                }}>
+                  {fmtPct(s.conversion_from_prev)}
+                </span>
+              ) : (
+                <span style={{
+                  fontSize: 10,
+                  color: "var(--ink-4)",
+                  minWidth: 56,
+                  textAlign: "right",
+                }}>—</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {
