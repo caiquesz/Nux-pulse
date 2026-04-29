@@ -390,36 +390,37 @@ export default function ReportsPage() {
 
       <style jsx global>{`
         @media print {
-          /* 1. Preservar cores (sem isso navegador ignora backgrounds no PDF) */
+          /* ═══════════════════════════════════════════════════════════════
+             RELATORIO PROFISSIONAL — TEMA LIGHT
+             Hero permanece DARK (capa/cover), corpo todo branco-cream
+             pra impressao limpa, alta legibilidade, economiza tinta.
+             ═══════════════════════════════════════════════════════════════ */
+
+          /* 1. Preservar cores fixas (gradients, brand colors do hero) */
           *, *::before, *::after {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             color-adjust: exact !important;
           }
 
-          /* 2. Esconder chrome da app (sidebar, topbar, header da pagina) */
-          .sidebar,
-          .topbar,
-          .page-head,
-          .no-print,
-          .sb-badge,
-          nav,
-          aside.sidebar {
-            display: none !important;
-          }
+          /* 2. Esconder chrome da app */
+          .sidebar, .topbar, .page-head, .no-print,
+          .sb-badge, nav, aside.sidebar { display: none !important; }
 
-          /* 3. Reset do layout pra ocupar pagina inteira A4 */
+          /* 3. RESET geral pra fundo BRANCO + texto escuro */
           html, body {
-            background: #fff !important;
+            background: #ffffff !important;
+            color: #1a1a1a !important;
             margin: 0 !important;
             padding: 0 !important;
-            color: #000 !important;
+            overflow: visible !important;
           }
           .app, .app[data-sidebar] {
             display: block !important;
             grid-template-columns: 1fr !important;
             height: auto !important;
             overflow: visible !important;
+            background: #ffffff !important;
           }
           .main, .page {
             padding: 0 !important;
@@ -427,9 +428,10 @@ export default function ReportsPage() {
             max-width: 100% !important;
             width: 100% !important;
             overflow: visible !important;
+            background: #ffffff !important;
           }
 
-          /* 4. Container do relatorio: ocupa A4 com margens compensadas pelo @page */
+          /* 4. Container — ocupa pagina inteira sem 860px estourando */
           .report-doc {
             border: none !important;
             padding: 0 !important;
@@ -437,64 +439,96 @@ export default function ReportsPage() {
             width: 100% !important;
             margin: 0 !important;
             display: block !important;
+            background: #ffffff !important;
+            color: #1a1a1a !important;
           }
 
-          /* 5. Hero compacto pra PDF (era 56px → 28px padding-top) */
+          /* 5. HERO (capa) — mantem dark, é a "cover" do PDF */
           .report-hero {
             border-radius: 0 !important;
-            padding: 28px 32px 24px !important;
+            padding: 32px 32px 28px !important;
             page-break-after: avoid !important;
+            background: #0a0a0a !important;
+            color: #f5f5f5 !important;
           }
-          .report-hero h1 {
-            font-size: 32px !important;
-            margin-bottom: 6px !important;
-          }
-          .report-hero > div:last-child {
-            font-size: 16px !important;
-            margin-top: 20px !important;
-          }
+          .report-hero, .report-hero * { color-scheme: dark; }
+          .report-hero h1 { font-size: 32px !important; margin-bottom: 6px !important; color: #f5f5f5 !important; }
+          .report-hero > div:last-child { font-size: 15px !important; margin-top: 18px !important; }
 
-          /* 6. Corpo do relatorio: padding compacto */
+          /* 6. BODY (apos hero) — fundo BRANCO + texto escuro */
           .report-doc > div:last-child {
             border: none !important;
             border-radius: 0 !important;
-            padding: 24px 32px !important;
-            gap: 24px !important;
+            padding: 32px 32px !important;
+            gap: 28px !important;
+            background: #ffffff !important;
+            color: #1a1a1a !important;
           }
 
-          /* 7. Page break controls — cada secao tenta caber numa pagina, mas
-                tambem permite quebra interna se for muito grande (era avoid
-                rigido que cortava conteudo) */
+          /* 7. Override TODAS as cores no body do relatorio (forca light) */
+          .report-doc > div:last-child *,
+          .report-doc > div:last-child h1,
+          .report-doc > div:last-child h2,
+          .report-doc > div:last-child h3,
+          .report-doc > div:last-child p,
+          .report-doc > div:last-child span,
+          .report-doc > div:last-child div,
+          .report-doc > div:last-child strong {
+            color: #1a1a1a !important;
+          }
+          /* Cinza medio pra textos secundarios (ink-3, ink-4, muted, sub, hint) */
+          .report-doc > div:last-child [class*="mono"],
+          .report-doc > div:last-child [style*="ink-3"],
+          .report-doc > div:last-child [style*="ink-4"],
+          .report-doc > div:last-child .muted,
+          .report-doc > div:last-child .dim {
+            color: #6b6b66 !important;
+          }
+          /* Cards/containers do body — bg cream sutil + border light */
+          .report-doc > div:last-child [style*="surface"],
+          .report-doc > div:last-child [class*="card"]:not(.report-hero) {
+            background: #fafaf6 !important;
+            border-color: #e5e5e0 !important;
+          }
+          /* Cards de KPI grande */
+          .report-doc > div:last-child section > div[style*="grid"] > div {
+            background: #fafaf6 !important;
+            border: 1px solid #e5e5e0 !important;
+            color: #1a1a1a !important;
+          }
+
+          /* 8. Page break controls — sem rigidez */
           section {
             break-inside: auto !important;
             page-break-inside: auto !important;
             margin-top: 0 !important;
           }
-          /* Secoes especificas que devem comecar em pagina nova */
-          section.report-page-break-before {
-            page-break-before: always !important;
-            break-before: page !important;
-          }
-          /* KPIs, charts, funnel: tentar nao cortar no meio */
+          /* Hero + resumo + kpis: tentar caber junto na pagina 1 */
+          .report-hero { page-break-after: avoid !important; }
+          /* Pequenos blocos: nao cortar no meio */
           section h2 + div,
-          .grid {
+          .grid,
+          [class*="card"] {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
           }
+          /* page-break-before: deixa browser decidir natural — evita pagina em branco */
+          section.report-page-break-before {
+            page-break-before: auto !important;
+            break-before: auto !important;
+          }
 
-          /* 8. SVGs (graficos) escalam pra largura disponivel */
+          /* 9. SVGs escalam pra largura disponivel */
           .report-doc svg {
             width: 100% !important;
             max-width: 100% !important;
             height: auto !important;
           }
-          /* BigChart wrap precisa de altura explicita pra ResizeObserver
-             nao colapsar pra zero em print */
           .report-doc [style*="position: relative"][style*="height"] {
-            min-height: 220px;
+            min-height: 200px;
           }
 
-          /* 9. Ajustes de pagina A4 */
+          /* 10. Ajustes de pagina A4 */
           @page {
             size: A4;
             margin: 12mm 12mm;
@@ -503,10 +537,23 @@ export default function ReportsPage() {
             margin: 0;
           }
 
-          /* 10. Forcar visibilidade — overflow hidden em ancestrais corta PDF */
-          html, body, .app, .main, .page, .report-doc {
-            overflow: visible !important;
+          /* 11. Charts: bordas/text claras pra harmonizar com fundo branco */
+          .report-doc > div:last-child [class*="card"] line,
+          .report-doc > div:last-child [class*="card"] text {
+            stroke: #d0d0cb !important;
           }
+          .report-doc > div:last-child text {
+            fill: #4a4a45 !important;
+            stroke: none !important;
+          }
+
+          /* 12. Forcar visibilidade global */
+          html, body, .app, .main, .page, .report-doc,
+          .report-doc > div:last-child, section { overflow: visible !important; }
+
+          /* 13. Eliminar trailing blank — body nao tem altura forcada */
+          body, html { height: auto !important; min-height: 0 !important; }
+          .report-doc { padding-bottom: 0 !important; margin-bottom: 0 !important; }
         }
       `}</style>
     </>
