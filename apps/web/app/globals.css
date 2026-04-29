@@ -705,6 +705,27 @@ button.card:hover .row-chevron {
   transform: translateX(2px);
 }
 .card.tight { padding: 0; overflow: hidden; }
+
+/* ── Previous-period grid (comparacao) ── visual de-emphasis vs grid atual.
+   Cards menores, opacity reduzida, sem sparkline. Permite scan rapido pelo
+   olho: o grid acima eh "agora", esse aqui eh "antes". */
+.grid-kpi-prev .card.card-prev {
+  padding: 12px 14px;
+  border-radius: 14px;
+  opacity: 0.75;
+  transition: opacity 200ms cubic-bezier(.2,.8,.2,1), transform 200ms cubic-bezier(.2,.8,.2,1);
+}
+.grid-kpi-prev .card.card-prev:hover {
+  opacity: 1;
+  transform: none;  /* nao lifta — eh referencia, nao acao */
+}
+.grid-kpi-prev .stat { gap: 4px; }
+.stat-value.stat-value-prev {
+  font-size: clamp(15px, 1.4vw, 20px);
+  letter-spacing: -0.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
 .card-head {
   display: flex;
   align-items: center;
@@ -755,17 +776,24 @@ button.card:hover .row-chevron {
   letter-spacing: 0; text-transform: none; cursor: help;
 }
 .stat-value {
-  /* clamp shrinka a fonte quando o card fica estreito (notebook 1366px →
-     6 colunas = ~150px/card). Min 18px legível, preferido ~2vw, max 28px. */
-  font-size: clamp(18px, 1.8vw, 28px);
+  /* Clamp encolhe a fonte em cards estreitos. Min reduzido pra 16px pra
+     valores BRL grandes (R$ 214.500,00) caberem sem quebrar. */
+  font-size: clamp(16px, 1.7vw, 28px);
   font-weight: 700;
-  letter-spacing: -1px;
+  letter-spacing: -0.8px;
   color: var(--ink);
-  line-height: 1;
+  line-height: 1.05;
   font-variant-numeric: tabular-nums;
-  /* Valores BRL longos (ex. "R$ 1.234.567") quebram em 2 linhas no lugar de overflow. */
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  /* Numeros nao devem quebrar no meio do digito (vira "R$ 214.500,0\n0").
+     keep-all impede quebra entre digitos; overflow-wrap normal so quebra
+     em espacos (ex: entre "R$" e o numero, fallback aceitavel). */
+  word-break: keep-all;
+  overflow-wrap: normal;
+  /* Se ainda assim nao couber, esconde com ellipsis em vez de quebrar feio */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* Title attribute via JSX pode mostrar valor full em hover */
 }
 .stat-value .cur {
   font-size: 0.55em;

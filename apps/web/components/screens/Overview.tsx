@@ -201,21 +201,25 @@ export function Overview() {
       <DataIntegrityBanner data={overviewQ.data} clientSlug={slug} />
 
       <div className="sec-head">
-        <span className="num">SEÇÃO 01</span>
+        <span className="num">SEÇÃO 01 · PERÍODO DE ANÁLISE</span>
         <h3>Resultado do período</h3>
-        <span className="hint">Métricas consolidadas Meta Ads</span>
+        <span className="hint">
+          {overviewQ.data
+            ? `${formatRangeBr(overviewQ.data.since, overviewQ.data.until)} · Meta Ads`
+            : "Métricas consolidadas Meta Ads"}
+        </span>
         <div className="rule" />
       </div>
 
-      <div className="grid-kpi" style={{ marginBottom: 28 }}>
+      <div className="grid-kpi" style={{ marginBottom: 36 }}>
         {kpis.map((k) => (
           <div key={k.label} className="card">
             <div className="stat">
-              <span className="stat-label">{k.label}</span>
-              <span className="stat-value">{loading ? "—" : k.value}</span>
-              <div className="stat-delta">
-                <span className="dim">vs. período ant.</span>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
+                <span className="stat-label">{k.label}</span>
+                {!loading && <DeltaChip delta={k.delta} semantic={k.deltaSemantic} />}
               </div>
+              <span className="stat-value">{loading ? "—" : k.value}</span>
               {k.series.length > 1 && (
                 <div className="stat-spark">
                   <Sparkline
@@ -230,6 +234,36 @@ export function Overview() {
           </div>
         ))}
       </div>
+
+      {/* SEÇÃO 02 — Período de comparação (anterior).
+          Grid espelha layout da seção 01 mas em treatment muted: cards menores,
+          sem sparkline, opacity 80%, valor em peso intermediario. Permite scan
+          rapido visual: cada card "atual" tem seu twin embaixo, alinhado pela
+          mesma coluna do grid. */}
+      {overviewQ.data && (
+        <>
+          <div className="sec-head">
+            <span className="num">SEÇÃO 02 · COMPARAÇÃO</span>
+            <h3>Período anterior</h3>
+            <span className="hint">
+              {formatRangeBr(overviewQ.data.previous_period.since, overviewQ.data.previous_period.until)}
+            </span>
+            <div className="rule" />
+          </div>
+          <div className="grid-kpi grid-kpi-prev" style={{ marginBottom: 28 }}>
+            {kpis.map((k) => (
+              <div key={k.label} className="card card-prev">
+                <div className="stat">
+                  <span className="stat-label">{k.label}</span>
+                  <span className="stat-value stat-value-prev">
+                    {loading ? "—" : k.prevValue}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="sec-head">
         <span className="num">SEÇÃO 02</span>
@@ -352,11 +386,21 @@ export function Overview() {
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────
+type DeltaSemantic = "up_better" | "up_worse" | "neutral";
+
 type Kpi = {
   label: string;
   value: string;
+  /** Valor do periodo de comparacao formatado (mesmo formato que value). */
+  prevValue: string;
   unit: string;
-  delta: number;
+  /** Ratio: 0.12 = +12% (positivo). Null quando previous era 0 ou indefinido. */
+  delta: number | null;
+  /** Define cor do delta chip:
+   *  up_better: aumentar eh bom (revenue, vendas, ROAS) -> verde quando >0
+   *  up_worse:  aumentar eh ruim (CPL, CPA) -> vermelho quando >0
+   *  neutral:   ambiguo (investimento, impressoes) -> cinza */
+  deltaSemantic: DeltaSemantic;
   series: number[];
   format: (v: number) => string;
 };
@@ -364,17 +408,18 @@ type Kpi = {
 function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[] {
   const emptySeries: number[] = [];
   const noFmt = (v: number) => v.toLocaleString("pt-BR");
+  const dash = "—";
   if (!o) {
     return [
-      { label: "Investimento", value: "—", unit: "BRL", delta: 0, series: emptySeries, format: fmtBRL },
-      { label: "Mensagens", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
-      { label: "Leads", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
-      { label: "Vendas", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
-      { label: "Faturamento", value: "—", unit: "BRL", delta: 0, series: emptySeries, format: fmtBRL },
-      { label: "ROAS", value: "—", unit: "x", delta: 0, series: emptySeries, format: (v) => v.toFixed(2) + "x" },
-      { label: "Impressões", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
-      { label: "Cliques", value: "—", unit: "", delta: 0, series: emptySeries, format: noFmt },
-      { label: "CTR", value: "—", unit: "%", delta: 0, series: emptySeries, format: (v) => fmtPct(v) },
+      { label: "Investimento", value: dash, prevValue: dash, unit: "BRL", delta: null, deltaSemantic: "neutral", series: emptySeries, format: fmtBRL },
+      { label: "Mensagens",    value: dash, prevValue: dash, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "Leads",        value: dash, prevValue: dash, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "Vendas",       value: dash, prevValue: dash, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "Faturamento",  value: dash, prevValue: dash, unit: "BRL", delta: null, deltaSemantic: "up_better", series: emptySeries, format: fmtBRL },
+      { label: "ROAS",         value: dash, prevValue: dash, unit: "x",   delta: null, deltaSemantic: "up_better", series: emptySeries, format: (v) => v.toFixed(2) + "x" },
+      { label: "Impressões",   value: dash, prevValue: dash, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "Cliques",      value: dash, prevValue: dash, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "CTR",          value: dash, prevValue: dash, unit: "%",   delta: null, deltaSemantic: "up_better", series: emptySeries, format: (v) => fmtPct(v) },
     ];
   }
 
@@ -431,88 +476,190 @@ function buildKpis(o: MetaOverview | undefined, daily?: MetaDailyResponse): Kpi[
   const ctrSeries = series.map((p) => (p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0));
 
   const d = o.deltas;
+  const prev = o.previous_period;
   const roasLabel = effectiveRoas > 0 ? `${effectiveRoas.toFixed(2)}x` : "—";
+
+  // Previous-period values pra comparacao. Quando usingTrackcore* esta ativo,
+  // usamos a fonte equivalente (manual_*) no periodo anterior pra comparar
+  // apples-to-apples. Senao usamos os campos canonicos da Meta.
+  const prevTrackcoreRevenue = prev.manual_revenue ?? 0;
+  const prevTrackcorePurchases = prev.manual_purchases ?? 0;
+  const prevEffectiveRevenue = usingTrackcoreRevenue ? prevTrackcoreRevenue : prev.revenue;
+  const prevEffectivePurchases = usingTrackcoreSales ? prevTrackcorePurchases : prev.purchases;
+  const prevEffectiveRoas = prevEffectiveRevenue > 0 && prev.spend > 0
+    ? prevEffectiveRevenue / prev.spend
+    : prev.roas;
+
+  // Helper: ratio delta com fallback null quando prev=0 (pra evitar divisao por zero
+  // ou %s sem sentido tipo "+infinito%").
+  const ratio = (cur: number, p: number): number | null => {
+    if (!p || p === 0) return null;
+    return (cur - p) / p;
+  };
 
   return [
     {
       label: "Investimento",
       value: fmtBRL(o.spend),
+      prevValue: fmtBRL(prev.spend),
       unit: "BRL",
-      delta: d.spend ?? 0,
+      delta: d.spend ?? ratio(o.spend, prev.spend),
+      deltaSemantic: "neutral", // gastar mais nao eh bom nem ruim por si só
       series: spendSeries,
       format: fmtBRL,
     },
     {
       label: o.messages > 0 ? `Mensagens · R$${o.cost_per_message.toFixed(2)}/msg` : "Mensagens",
       value: fmtIntCompact(o.messages),
+      prevValue: fmtIntCompact(prev.messages),
       unit: "",
-      delta: d.messages ?? 0,
+      delta: d.messages ?? ratio(o.messages, prev.messages),
+      deltaSemantic: "up_better",
       series: msgSeries,
       format: (v) => fmtIntCompact(Math.round(v)),
     },
     {
       label: o.leads > 0 ? `Leads · R$${o.cost_per_lead.toFixed(2)}/lead` : "Leads",
       value: fmtIntCompact(o.leads),
+      prevValue: fmtIntCompact(prev.leads),
       unit: "",
-      delta: d.leads ?? 0,
+      delta: d.leads ?? ratio(o.leads, prev.leads),
+      deltaSemantic: "up_better",
       series: leadSeries,
       format: (v) => Math.round(v).toLocaleString("pt-BR"),
     },
     {
-      // Trackcore preferido — quando ha vendas manuais, mostra "via Trackcore"
-      // e usa effectivePurchases. Senao cai pra contagem da Meta (Pixel).
       label: effectivePurchases > 0
         ? (usingTrackcoreSales
             ? `Vendas · R$${effectiveCpp.toFixed(2)}/venda · via Trackcore`
             : `Vendas · R$${effectiveCpp.toFixed(2)}/venda`)
         : (usingTrackcoreSales ? "Vendas · via Trackcore" : "Vendas"),
       value: fmtIntCompact(effectivePurchases),
+      prevValue: fmtIntCompact(prevEffectivePurchases),
       unit: "",
-      delta: usingTrackcoreSales ? 0 : (d.purchases ?? 0),
+      delta: ratio(effectivePurchases, prevEffectivePurchases),
+      deltaSemantic: "up_better",
       series: purchaseSeries,
       format: (v) => Math.round(v).toLocaleString("pt-BR"),
     },
     {
       label: usingTrackcoreRevenue ? "Faturamento · via Trackcore" : "Faturamento",
       value: effectiveRevenue > 0 ? fmtBRL(effectiveRevenue) : "—",
+      prevValue: prevEffectiveRevenue > 0 ? fmtBRL(prevEffectiveRevenue) : "—",
       unit: "BRL",
-      delta: usingTrackcoreRevenue ? 0 : (d.revenue ?? 0),
-      series: revenueSeries, // vazio quando nao ha tracking → esconde sparkline
+      delta: ratio(effectiveRevenue, prevEffectiveRevenue),
+      deltaSemantic: "up_better",
+      series: revenueSeries,
       format: fmtBRL,
     },
     {
       label: usingTrackcoreRevenue ? "ROAS · via Trackcore" : "ROAS",
       value: roasLabel,
+      prevValue: prevEffectiveRoas > 0 ? `${prevEffectiveRoas.toFixed(2)}x` : "—",
       unit: "x",
-      delta: usingTrackcoreRevenue ? 0 : (d.roas ?? 0),
-      series: roasSeries, // vazio quando não há receita → sparkline escondido
+      delta: ratio(effectiveRoas, prevEffectiveRoas),
+      deltaSemantic: "up_better",
+      series: roasSeries,
       format: (v) => v.toFixed(2) + "x",
     },
     {
       label: "Impressões",
       value: fmtIntCompact(o.impressions),
+      prevValue: fmtIntCompact(prev.impressions),
       unit: "",
-      delta: d.impressions ?? 0,
+      delta: d.impressions ?? ratio(o.impressions, prev.impressions),
+      deltaSemantic: "up_better",
       series: impSeries,
       format: (v) => fmtIntCompact(Math.round(v)),
     },
     {
       label: "Cliques",
       value: fmtIntCompact(o.clicks),
+      prevValue: fmtIntCompact(prev.clicks),
       unit: "",
-      delta: d.clicks ?? 0,
+      delta: d.clicks ?? ratio(o.clicks, prev.clicks),
+      deltaSemantic: "up_better",
       series: clkSeries,
       format: (v) => fmtIntCompact(Math.round(v)),
     },
     {
       label: "CTR",
       value: fmtPct(o.ctr),
+      prevValue: fmtPct(prev.ctr),
       unit: "%",
-      delta: d.ctr ?? 0,
+      delta: d.ctr ?? ratio(o.ctr, prev.ctr),
+      deltaSemantic: "up_better",
       series: ctrSeries,
       format: (v) => fmtPct(v),
     },
   ];
+}
+
+/** Formata range de datas estilo "1–30 abr 2026" ou "28 mar – 27 abr 2026". */
+function formatRangeBr(since: string, until: string): string {
+  const a = new Date(`${since}T12:00:00`);
+  const b = new Date(`${until}T12:00:00`);
+  const month = (d: Date) => d.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "");
+  const sameMonth = a.getMonth() === b.getMonth() && a.getFullYear() === b.getFullYear();
+  const sameYear = a.getFullYear() === b.getFullYear();
+  if (sameMonth) {
+    return `${a.getDate()}–${b.getDate()} ${month(b)} ${b.getFullYear()}`;
+  }
+  if (sameYear) {
+    return `${a.getDate()} ${month(a)} – ${b.getDate()} ${month(b)} ${b.getFullYear()}`;
+  }
+  return `${a.getDate()} ${month(a)} ${a.getFullYear()} – ${b.getDate()} ${month(b)} ${b.getFullYear()}`;
+}
+
+/** Chip de delta semantico:
+ *  - up_better: aumentar eh bom (revenue, vendas) → verde no positivo, vermelho no negativo
+ *  - up_worse:  aumentar eh ruim (CPL, CPA) → vermelho no positivo, verde no negativo
+ *  - neutral:   ambiguo (investimento) → cinza sempre
+ *  delta=null (ex: prev=0) → mostra "—" cinza */
+function DeltaChip({ delta, semantic }: { delta: number | null; semantic: DeltaSemantic }) {
+  if (delta === null || !Number.isFinite(delta)) {
+    return (
+      <span className="mono" style={{
+        fontSize: 9, color: "var(--ink-4)", letterSpacing: 0.4,
+        padding: "2px 6px", borderRadius: 4, background: "var(--surface-2)",
+      }}>
+        novo
+      </span>
+    );
+  }
+  const isFlat = Math.abs(delta) < 0.005; // < 0.5% trata como flat
+  const isPositive = delta > 0;
+  const pct = (delta * 100).toFixed(1).replace(/\.0$/, "");
+  const sign = isPositive ? "+" : ""; // negativo ja vem com "-"
+
+  let color: string;
+  let bg: string;
+  if (isFlat || semantic === "neutral") {
+    color = "var(--ink-3)";
+    bg = "var(--surface-2)";
+  } else if (semantic === "up_better") {
+    color = isPositive ? "var(--pos)" : "var(--neg)";
+    bg = isPositive ? "var(--pos-bg)" : "var(--neg-bg)";
+  } else { // up_worse
+    color = isPositive ? "var(--neg)" : "var(--pos)";
+    bg = isPositive ? "var(--neg-bg)" : "var(--pos-bg)";
+  }
+
+  const arrow = isFlat ? "→" : isPositive ? "↗" : "↘";
+
+  return (
+    <span className="mono" style={{
+      display: "inline-flex", alignItems: "center", gap: 2,
+      fontSize: 10, fontWeight: 600, letterSpacing: 0.2,
+      padding: "2px 6px", borderRadius: 4,
+      color, background: bg,
+      whiteSpace: "nowrap",
+      flexShrink: 0,
+    }}>
+      <span aria-hidden style={{ fontSize: 10, lineHeight: 1 }}>{arrow}</span>
+      {sign}{pct}%
+    </span>
+  );
 }
 
 function statusDot(s: string | null): "on" | "warn" | "off" {
