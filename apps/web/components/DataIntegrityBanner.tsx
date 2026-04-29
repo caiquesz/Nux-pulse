@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 
 import { type MetaOverview, type TrackcoreHealthIssue, trackcoreHealth } from "@/lib/api";
@@ -125,10 +126,24 @@ export function DataIntegrityBanner({
         {ctxLine && (
           <span className="mono" style={{
             fontSize: 10, color: "var(--ink-4)", letterSpacing: 0.4,
-            marginLeft: "auto",
           }}>
             {ctxLine}
           </span>
+        )}
+        {clientSlug && (
+          <Link
+            href={`/c/${clientSlug}/conversions`}
+            className="btn"
+            style={{
+              marginLeft: "auto",
+              fontSize: 11,
+              padding: "7px 14px",
+              minHeight: 30,
+              textDecoration: "none",
+            }}
+          >
+            + Registrar venda manual
+          </Link>
         )}
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
