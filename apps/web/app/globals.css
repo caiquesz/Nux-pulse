@@ -6,51 +6,68 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* brand neutrals (invariant) */
-  --brand-black:    #0D0D0D;
-  --brand-charcoal: #3A3836;
+  /* ── Brand neutrals (invariant) ── */
+  --brand-black:    #050505;
+  --brand-ink:      #0A0A0A;
+  --brand-charcoal: #141414;
   --brand-slate:    #787472;
   --brand-stone:    #C4C1BB;
   --brand-cream:    #EAE7DF;
   --brand-ivory:    #F5F2EB;
-  --brand-white:    #FAFAF8;
+  --brand-white:    #FAFAFA;
 
-  /* ── Semantic palette ──
-     Warm, NUX-aligned, saturated enough to scan at a glance
-     but not SaaS-generic. Each role has ink, soft bg, and chart fill. */
-  --pos:      oklch(0.58 0.13 155);   /* forest green — receita, meta batida */
-  --pos-bg:   oklch(0.94 0.05 155);
-  --pos-fill: oklch(0.58 0.13 155 / 0.14);
+  /* ── Brand accent — vivid orange (Cryptox-inspired) ──
+     Reserved for: primary CTAs, focal data, hover/focus, active selection.
+     Not for status (use --pos/--neg for that). */
+  --brand-orange:    oklch(0.72 0.20 50);   /* #FF6B35 — accent base */
+  --brand-orange-hi: oklch(0.78 0.22 45);   /* hover / glow seed */
+  --brand-orange-lo: oklch(0.55 0.18 50);   /* pressed / dim */
 
-  --neg:      oklch(0.54 0.17 28);    /* terracotta red — queda, acima do CPA */
-  --neg-bg:   oklch(0.95 0.05 28);
-  --neg-fill: oklch(0.54 0.17 28 / 0.14);
+  /* ── Semantic palette (status only) ──
+     Used sparingly: deltas, dots, value tinting. Never as card decoration. */
+  --pos:      oklch(0.78 0.16 145);   /* mint-green — positive metric */
+  --pos-bg:   oklch(0.30 0.07 145);
+  --pos-fill: oklch(0.78 0.16 145 / 0.14);
 
-  --warn:     oklch(0.68 0.14 65);    /* warm amber — fadiga, anomalia */
-  --warn-bg:  oklch(0.95 0.06 75);
-  --warn-fill:oklch(0.68 0.14 65 / 0.14);
+  --neg:      oklch(0.65 0.20 25);    /* coral-red — negative metric */
+  --neg-bg:   oklch(0.30 0.09 25);
+  --neg-fill: oklch(0.65 0.20 25 / 0.14);
 
-  --info:     oklch(0.52 0.08 235);   /* dusty slate-blue — informativo, benchmark */
-  --info-bg:  oklch(0.94 0.03 235);
-  --info-fill:oklch(0.52 0.08 235 / 0.14);
+  --warn:     oklch(0.78 0.15 75);    /* amber */
+  --warn-bg:  oklch(0.30 0.07 75);
+  --warn-fill:oklch(0.78 0.15 75 / 0.14);
 
-  --hero:     oklch(0.45 0.14 255);   /* deep indigo — hero KPI accent (faturamento) */
-  --hero-bg:  oklch(0.94 0.04 255);
+  --info:     oklch(0.72 0.10 235);   /* slate-blue */
+  --info-bg:  oklch(0.28 0.06 235);
+  --info-fill:oklch(0.72 0.10 235 / 0.14);
 
-  /* ── Accent palette ──
-     Cores decorativas, SEM significado. Use para destaques visuais,
-     gráficos multi-série e hero banners. Nunca como substituto de pos/neg. */
-  --lime:       oklch(0.90 0.22 125);  /* verde-lima vibrante, chartreuse */
-  --lime-bg:    oklch(0.96 0.09 125);
-  --lime-ink:   oklch(0.20 0.06 125);  /* texto sobre fundo lime */
+  /* --hero is the focal-data accent — points at orange brand */
+  --hero:     var(--brand-orange);
+  --hero-bg:  oklch(0.30 0.10 50);
 
-  --citrus:     oklch(0.72 0.19 55);   /* laranja vibrante moderno */
-  --citrus-bg:  oklch(0.95 0.06 60);
-  --citrus-ink: oklch(0.98 0 0);
+  /* ── Legacy accent palette ── kept as aliases for back-compat with existing
+     class names; all map to brand orange now to enforce single-accent system. */
+  --lime:       var(--brand-orange);
+  --lime-bg:    var(--hero-bg);
+  --lime-ink:   var(--brand-white);
 
-  --cobalt:     oklch(0.56 0.22 265);  /* azul electric */
-  --cobalt-bg:  oklch(0.94 0.05 265);
-  --cobalt-ink: oklch(0.98 0 0);
+  --citrus:     var(--brand-orange);
+  --citrus-bg:  var(--hero-bg);
+  --citrus-ink: var(--brand-white);
+
+  --cobalt:     var(--brand-orange);
+  --cobalt-bg:  var(--hero-bg);
+  --cobalt-ink: var(--brand-white);
+
+  /* ── Data palette ──
+     Cores SOMENTE para series multiplas em graficos. NAO usar em UI chrome
+     (cards, buttons, borders) — isso quebra o single-accent system.
+     Paleta moderna: warm primary + cool secondary + green outcome. */
+  --data-orange: oklch(0.74 0.20 50);   /* money / cost / spend */
+  --data-cyan:   oklch(0.78 0.16 215);  /* atividade neutra (msgs, cliques) */
+  --data-lime:   oklch(0.84 0.20 145);  /* outcome positivo (vendas, conversoes) */
+  --data-pink:   oklch(0.72 0.22 340);  /* alertas / special */
+  --data-violet: oklch(0.70 0.20 280);  /* comparativo / quinario */
 
   /* typography — referências via variáveis do next/font (definidas no layout.tsx) */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
@@ -89,54 +106,60 @@
   --card-shadow: 0 1px 0 rgba(13,13,13,0.02), 0 1px 3px rgba(13,13,13,0.04);
 }
 
-/* ── DARK theme ── */
+/* ── DARK theme — Cryptox-inspired: pure black + orange accent ── */
 [data-theme="dark"] {
-  --bg:          #0B0B0A;
-  --surface:     #131312;
-  --surface-2:   #1A1918;
-  --surface-3:   #232220;
-  --border:      rgba(234,231,223,0.08);
-  --border-2:    rgba(234,231,223,0.14);
-  --ink:         var(--brand-ivory);
-  --ink-2:       #D4D1C9;
-  --ink-3:       #8A8784;
-  --ink-4:       #575451;
-  --accent:      var(--brand-ivory);
-  --accent-ink:  var(--brand-black);
-  --hover:       rgba(234,231,223,0.05);
-  --active:      rgba(234,231,223,0.10);
-  --chart-line:  oklch(0.82 0.12 75);   /* warm amber-cream for dark charts */
-  --chart-fill:  oklch(0.82 0.12 75 / 0.18);
-  --chart-line-2: var(--brand-slate);
-  --chart-fill-2: rgba(120,116,114,0.15);
-  --chart-grid:  rgba(234,231,223,0.06);
-  --card-shadow: 0 1px 0 rgba(0,0,0,0.3);
+  --bg:          #050505;                /* page — true black */
+  --surface:     #111111;                /* card base */
+  --surface-2:   #1A1A1A;                /* raised */
+  --surface-3:   #232323;                /* nested / chip */
+  --surface-hi:  #1F1F1F;                /* card "lit" top of gradient */
+  --border:      rgba(255,255,255,0.06); /* hairline */
+  --border-2:    rgba(255,255,255,0.10);
+  --border-hi:   rgba(255,255,255,0.14); /* highlight edge (top of card) */
+  --ink:         #FAFAFA;                /* primary text */
+  --ink-2:       #D4D4D4;
+  --ink-3:       #888888;                /* meta */
+  --ink-4:       #555555;                /* faint */
+  --accent:      var(--brand-orange);    /* pill CTA, focus, primary */
+  --accent-ink:  #0A0A0A;                /* text on orange */
+  --accent-hi:   var(--brand-orange-hi); /* hover */
+  --hover:       rgba(255,255,255,0.04);
+  --active:      rgba(255,255,255,0.08);
 
-  --pos:       oklch(0.72 0.14 155);
-  --pos-bg:    oklch(0.26 0.06 155);
-  --pos-fill:  oklch(0.72 0.14 155 / 0.18);
-  --neg:       oklch(0.68 0.18 28);
-  --neg-bg:    oklch(0.28 0.08 28);
-  --neg-fill:  oklch(0.68 0.18 28 / 0.18);
-  --warn:      oklch(0.78 0.15 65);
-  --warn-bg:   oklch(0.28 0.07 65);
-  --warn-fill: oklch(0.78 0.15 65 / 0.18);
-  --info:      oklch(0.68 0.10 235);
-  --info-bg:   oklch(0.26 0.06 235);
-  --info-fill: oklch(0.68 0.10 235 / 0.18);
-  --hero:      oklch(0.68 0.14 255);
-  --hero-bg:   oklch(0.26 0.08 255);
+  --chart-line:  var(--brand-orange);
+  --chart-fill:  oklch(0.72 0.20 50 / 0.16);
+  --chart-line-2: #555555;
+  --chart-fill-2: rgba(120,120,120,0.10);
+  --chart-grid:  rgba(255,255,255,0.04);
+  --card-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 12px 32px -12px rgba(0,0,0,0.6);
 
-  /* Accents — mais saturados no dark pra brilharem sobre fundo escuro */
-  --lime:       oklch(0.92 0.24 125);
-  --lime-bg:    oklch(0.25 0.09 125);
-  --lime-ink:   oklch(0.10 0 0);        /* texto preto sobre lime vibrante */
-  --citrus:     oklch(0.78 0.20 55);
-  --citrus-bg:  oklch(0.27 0.09 55);
-  --citrus-ink: oklch(0.10 0 0);
-  --cobalt:     oklch(0.70 0.22 265);
-  --cobalt-bg:  oklch(0.25 0.09 265);
-  --cobalt-ink: oklch(0.98 0 0);
+  /* Status palette — slightly more vivid in dark */
+  --pos:       oklch(0.82 0.16 145);
+  --pos-bg:    oklch(0.28 0.07 145);
+  --pos-fill:  oklch(0.82 0.16 145 / 0.16);
+  --neg:       oklch(0.70 0.20 25);
+  --neg-bg:    oklch(0.30 0.09 25);
+  --neg-fill:  oklch(0.70 0.20 25 / 0.16);
+  --warn:      oklch(0.82 0.15 75);
+  --warn-bg:   oklch(0.30 0.07 75);
+  --warn-fill: oklch(0.82 0.15 75 / 0.16);
+  --info:      oklch(0.74 0.10 235);
+  --info-bg:   oklch(0.28 0.06 235);
+  --info-fill: oklch(0.74 0.10 235 / 0.16);
+
+  --hero:      var(--brand-orange);
+  --hero-bg:   oklch(0.30 0.10 50);
+
+  /* Legacy accent aliases — all converge to brand orange */
+  --lime:      var(--brand-orange);
+  --lime-bg:   var(--hero-bg);
+  --lime-ink:  var(--accent-ink);
+  --citrus:    var(--brand-orange);
+  --citrus-bg: var(--hero-bg);
+  --citrus-ink:var(--accent-ink);
+  --cobalt:    var(--brand-orange);
+  --cobalt-bg: var(--hero-bg);
+  --cobalt-ink:var(--accent-ink);
 }
 
 /* ── DENSITY ── */
@@ -481,38 +504,102 @@ button {
 }
 [data-theme="dark"] .seg button.on { box-shadow: inset 0 0 0 1px var(--border-2); }
 
+/* ── Buttons ──
+   .btn (default) is the primary CTA: pill, orange, with subtle glow on hover.
+   .btn.ghost is the secondary: pill, transparent, hairline border.
+   .btn.dark is the tertiary: pill, dark surface, no border (for inline actions). */
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  background: var(--ink);
-  color: var(--accent-ink);
+  gap: 8px;
+  padding: 10px 18px;
+  background:
+    linear-gradient(180deg,
+      oklch(0.78 0.22 45) 0%,
+      oklch(0.65 0.20 50) 100%);
+  color: #FFFFFF;
   font-size: 12px;
-  font-weight: 500;
-  border-radius: 6px;
-  transition: opacity 120ms;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  border-radius: 999px;
+  min-height: 36px;
+  position: relative;
+  /* gloss layer at top + color glow */
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.28),
+    inset 0 -1px 0 rgba(0,0,0,0.18),
+    0 4px 16px -2px oklch(0.72 0.20 50 / 0.45),
+    0 1px 0 rgba(0,0,0,0.10);
+  transition:
+    transform 120ms ease,
+    box-shadow 240ms ease,
+    background 160ms ease;
 }
-.btn:hover { opacity: 0.88; }
+.btn:hover {
+  background:
+    linear-gradient(180deg,
+      oklch(0.82 0.22 45) 0%,
+      oklch(0.70 0.21 50) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.35),
+    inset 0 -1px 0 rgba(0,0,0,0.16),
+    0 0 0 1px oklch(0.78 0.22 45 / 0.4),
+    0 8px 32px -4px oklch(0.72 0.20 50 / 0.6),
+    0 1px 0 rgba(0,0,0,0.10);
+}
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px oklch(0.78 0.22 45 / 0.6),
+    inset 0 1px 0 rgba(255,255,255,0.28),
+    0 4px 16px -2px oklch(0.72 0.20 50 / 0.45);
+}
 .btn.ghost {
   background: transparent;
   color: var(--ink-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-2);
+  box-shadow: none;
 }
-.btn.ghost:hover { border-color: var(--border-2); color: var(--ink); }
+.btn.ghost:hover {
+  background: var(--hover);
+  border-color: var(--border-hi, var(--border-2));
+  color: var(--ink);
+  box-shadow: none;
+}
+.btn.dark {
+  background: var(--surface-2);
+  color: var(--ink);
+  box-shadow: none;
+}
+.btn.dark:hover {
+  background: var(--surface-3);
+  box-shadow: none;
+}
 
 .icon-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   color: var(--ink-3);
-  transition: background 120ms, color 120ms;
+  transition: background 160ms, color 160ms, border-color 160ms;
+  border: 1px solid transparent;
 }
-.icon-btn:hover { background: var(--hover); color: var(--ink); }
-.icon-btn svg { width: 14px; height: 14px; }
+.icon-btn:hover {
+  background: var(--hover);
+  color: var(--ink);
+  border-color: var(--border);
+}
+.icon-btn:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.icon-btn svg { width: 16px; height: 16px; }
 
 /* ─── PAGE ─── */
 .page {
@@ -569,13 +656,53 @@ button {
 @media (max-width: 1100px) {
   .grid-kpi { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 }
+/* ── CARD — glassmorphism (Cryptox-inspired multi-layer) ──
+   Layers from bottom to top:
+   1. Translucent gradient surface (slightly lit at top)
+   2. backdrop-filter blur+saturate to pick up ambient color from .stage-glow
+   3. Inner highlight (top hairline) via box-shadow inset
+   4. Outer drop shadow + subtle rim
+   Hover applies a micro Y-lift (-1px) + intensified glow. cubic-bezier(.2,.8,.2,1)
+   gives a "settle" feel that's more refined than linear ease. */
 .card {
-  background: var(--surface);
+  background:
+    linear-gradient(180deg,
+      color-mix(in oklch, var(--surface-hi, var(--surface)) 92%, transparent) 0%,
+      color-mix(in oklch, var(--surface) 80%, transparent) 100%);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-top-color: var(--border-hi, rgba(255,255,255,0.14));
+  border-radius: 18px;
   padding: var(--card-pad);
   position: relative;
-  box-shadow: var(--card-shadow);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.08),
+    0 1px 0 rgba(255,255,255,0.02),
+    0 24px 48px -16px rgba(0,0,0,0.6),
+    0 8px 16px -8px rgba(0,0,0,0.3);
+  transition:
+    border-color 280ms cubic-bezier(.2,.8,.2,1),
+    transform 280ms cubic-bezier(.2,.8,.2,1),
+    box-shadow 280ms cubic-bezier(.2,.8,.2,1),
+    background 280ms cubic-bezier(.2,.8,.2,1);
+}
+.card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255,255,255,0.10);
+  border-top-color: rgba(255,255,255,0.20);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    0 1px 0 rgba(255,255,255,0.04),
+    0 32px 64px -16px rgba(0,0,0,0.7),
+    0 16px 32px -8px rgba(0,0,0,0.4),
+    0 0 32px -12px oklch(0.72 0.20 50 / 0.18);  /* faint orange ambient glow */
+}
+/* Cards inside a Link/button — preserve hover from parent .card and add chevron lift */
+a.card:hover .row-chevron,
+button.card:hover .row-chevron {
+  color: var(--ink-2);
+  transform: translateX(2px);
 }
 .card.tight { padding: 0; overflow: hidden; }
 .card-head {
@@ -654,25 +781,28 @@ button {
   font-weight: 500;
 }
 
-/* Hero KPI — primary card on every page */
+/* ── Hero KPI — primary card on page. No side stripe (Cryptox-style):
+   the orange comes through the value, the label, and a subtle radial wash. ── */
 .kpi-hero {
   grid-column: span 2;
-  background: var(--surface);
+  background:
+    radial-gradient(120% 80% at 100% 0%, oklch(0.72 0.20 50 / 0.10), transparent 60%),
+    linear-gradient(180deg, var(--surface-hi, var(--surface)) 0%, var(--surface) 70%);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 22px 24px;
+  border-top-color: var(--border-hi, var(--border-2));
+  border-radius: 16px;
+  padding: 24px 26px;
   position: relative;
   overflow: hidden;
   box-shadow: var(--card-shadow);
 }
-.kpi-hero::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; width: 3px; height: 100%;
-  background: var(--hero);
+.kpi-hero .stat-value {
+  font-size: 40px;
+  letter-spacing: -1.6px;
+  font-weight: 600;
+  color: var(--ink);
 }
-.kpi-hero .stat-value { font-size: 40px; letter-spacing: -1.4px; }
-.kpi-hero .stat-label { color: var(--hero); }
+.kpi-hero .stat-label { color: var(--accent); }
 
 /* Progress to goal */
 .goal {
@@ -691,23 +821,39 @@ button {
   overflow: hidden; position: relative;
 }
 .goal-bar > span {
-  display: block; height: 100%; border-radius: 100px;
-  transition: width 600ms cubic-bezier(.2,.8,.2,1);
+  display: block; height: 100%; width: 100%; border-radius: 100px;
+  transform: scaleX(var(--p, 0));
+  transform-origin: left center;
+  transition: transform 600ms cubic-bezier(.2,.8,.2,1);
 }
 .goal-bar.ok    > span { background: var(--pos); }
 .goal-bar.warn  > span { background: var(--warn); }
 .goal-bar.bad   > span { background: var(--neg); }
-.goal-bar.hero  > span { background: var(--hero); }
+.goal-bar.hero  > span { background: var(--accent); }
 .goal-bar .mark {
   position: absolute; top: -2px; bottom: -2px; width: 1.5px;
   background: var(--ink-3);
 }
 
-/* Semantic card accents (used on hero-stat variants) */
-.card.sem-pos  { border-left: 3px solid var(--pos);  border-top-left-radius: 10px; border-bottom-left-radius: 10px; }
-.card.sem-neg  { border-left: 3px solid var(--neg); }
-.card.sem-warn { border-left: 3px solid var(--warn); }
-.card.sem-info { border-left: 3px solid var(--info); }
+/* ── Semantic card variants — status now expressed via SUBTLE TINTED BACKGROUND
+   instead of side-tab stripe. Each blends ~6% of the semantic color into the
+   surface gradient. Combine with a colored .stat-value for full status read. ── */
+.card.sem-pos {
+  background:
+    linear-gradient(180deg, color-mix(in oklch, var(--pos) 8%, var(--surface-hi)) 0%, var(--surface) 80%);
+}
+.card.sem-neg {
+  background:
+    linear-gradient(180deg, color-mix(in oklch, var(--neg) 8%, var(--surface-hi)) 0%, var(--surface) 80%);
+}
+.card.sem-warn {
+  background:
+    linear-gradient(180deg, color-mix(in oklch, var(--warn) 8%, var(--surface-hi)) 0%, var(--surface) 80%);
+}
+.card.sem-info {
+  background:
+    linear-gradient(180deg, color-mix(in oklch, var(--info) 8%, var(--surface-hi)) 0%, var(--surface) 80%);
+}
 
 /* Section label — groups of cards */
 .sec-head {
@@ -766,36 +912,39 @@ button {
 .tag.citrus { background: var(--citrus-bg); color: var(--citrus); }
 .tag.cobalt { background: var(--cobalt-bg); color: var(--cobalt); }
 
-/* ── Accent cards — borda lateral colorida ── */
-.card.accent-lime   { border-left: 3px solid var(--lime); }
-.card.accent-citrus { border-left: 3px solid var(--citrus); }
-.card.accent-cobalt { border-left: 3px solid var(--cobalt); }
+/* ── Accent cards — DEPRECATED side-tab pattern.
+   Kept as no-op aliases for back-compat with existing class consumers.
+   New code should use plain .card or sem-* variants. ── */
+.card.accent-lime,
+.card.accent-citrus,
+.card.accent-cobalt { /* intentionally empty — no border stripe */ }
 
-/* ── Hero banner — card com fundo vibrante, uso com parcimônia
-      (1 por página, pra KPI principal ou destaque forte).
-      Use o modifier de cor para escolher o accent:
-        <div class="hero-banner accent-lime">...</div>  */
+/* ── Hero banner — single-accent dramatic surface (Cryptox-style).
+      Use with parsimony (1 per page, for the principal KPI / focal moment).
+      All accent-* modifiers map to brand orange now (single-accent system). */
 .hero-banner {
   position: relative;
-  border-radius: 12px;
-  padding: 24px 26px;
+  border-radius: 20px;
+  padding: 28px 30px;
   overflow: hidden;
-  box-shadow: var(--card-shadow);
-  background: #0D0D0D;             /* base escura fixa em qualquer tema */
-  color: var(--brand-ivory);
-  border: 1px solid rgba(234, 231, 223, 0.08);
+  background: #050505;
+  color: var(--brand-white);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-top-color: rgba(255, 255, 255, 0.10);
+  box-shadow: 0 1px 0 rgba(255,255,255,0.04) inset, 0 24px 48px -16px rgba(0,0,0,0.7);
 }
-.hero-banner.accent-lime   { --hb: var(--lime); }
-.hero-banner.accent-citrus { --hb: var(--citrus); }
-.hero-banner.accent-cobalt { --hb: var(--cobalt); }
+.hero-banner.accent-lime,
+.hero-banner.accent-citrus,
+.hero-banner.accent-cobalt { --hb: var(--brand-orange); }
 .hero-banner::after {
-  /* gradient radial sutil no canto, puxa o olho */
+  /* Big concentric radial glow — the Cryptox signature */
   content: "";
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(120% 80% at 100% 0%, var(--hb, var(--lime)) 0%, transparent 55%);
-  opacity: 0.18;
+    radial-gradient(80% 120% at 50% -20%, var(--hb, var(--brand-orange)) 0%, transparent 50%),
+    radial-gradient(60% 90% at 100% 100%, var(--hb, var(--brand-orange)) 0%, transparent 60%);
+  opacity: 0.22;
   pointer-events: none;
 }
 .hero-banner .hb-label {
@@ -810,27 +959,142 @@ button {
   z-index: 1;
 }
 .hero-banner .hb-value {
-  font-size: 40px;
-  font-weight: 700;
-  letter-spacing: -1.4px;
+  font-size: 48px;
+  font-weight: 600;
+  letter-spacing: -2px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
   position: relative;
   z-index: 1;
 }
 .hero-banner .hb-sub {
-  font-size: 12px;
-  color: rgba(234, 231, 223, 0.65);
-  margin-top: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 10px;
   position: relative;
   z-index: 1;
 }
-/* tags dentro do hero-banner ganham fundo translúcido pra funcionar sobre qualquer accent */
 .hero-banner .tag {
-  background: rgba(234, 231, 223, 0.08);
-  border: 1px solid rgba(234, 231, 223, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   position: relative;
   z-index: 1;
+}
+
+/* ── Stage glow — diffuse atmospheric light source ──
+   One single soft radial source emanating from above. Heavy blur (80px+) and
+   continuous opacity fade make it read as ambient light, not a stamped decal.
+   No hard ring boundaries. The light extends downward and fades out organically. */
+.stage-glow {
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+}
+.stage-glow::before {
+  content: "";
+  position: absolute;
+  top: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 1600px;
+  height: 900px;
+  pointer-events: none;
+  z-index: -1;
+  /* Single soft source — no concentric rings, just a smooth fade */
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 30%,
+    oklch(0.70 0.20 45 / 0.22) 0%,
+    oklch(0.62 0.18 38 / 0.10) 35%,
+    transparent 75%
+  );
+  filter: blur(80px) saturate(110%);
+  opacity: 0.9;
+}
+/* Subtle secondary highlight — creates depth without visible boundary */
+.stage-glow::after {
+  content: "";
+  position: absolute;
+  top: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60%;
+  max-width: 900px;
+  height: 500px;
+  pointer-events: none;
+  z-index: -1;
+  background: radial-gradient(
+    ellipse 60% 70% at 50% 20%,
+    oklch(0.78 0.22 50 / 0.15) 0%,
+    transparent 65%
+  );
+  filter: blur(50px);
+  opacity: 0.7;
+}
+
+/* ── Hero glow (smaller version for empty states / focal cards) ── */
+.hero-glow {
+  position: relative;
+  isolation: isolate;
+}
+.hero-glow::before {
+  content: "";
+  position: absolute;
+  inset: -10% -10% auto -10%;
+  height: 70%;
+  background:
+    radial-gradient(50% 80% at 50% 0%, oklch(0.72 0.20 50 / 0.35) 0%, transparent 60%),
+    radial-gradient(40% 60% at 50% 0%, oklch(0.78 0.22 45 / 0.25) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: -1;
+  filter: blur(8px);
+}
+
+/* ── Float pill — small floating badge with icon (Bitora/Coinza/etc style) ──
+   Use for floating context labels or decorative chips on the stage.
+   Translucent pill with subtle gradient + tiny icon dot. */
+.float-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 8px;
+  background:
+    linear-gradient(180deg,
+      rgba(40,40,40,0.6) 0%,
+      rgba(20,20,20,0.4) 100%);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-top-color: rgba(255,255,255,0.12);
+  border-radius: 999px;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.06),
+    0 8px 16px -8px rgba(0,0,0,0.4);
+  transition: border-color 200ms ease, color 200ms ease;
+}
+.float-pill:hover {
+  border-top-color: rgba(255,255,255,0.18);
+  color: var(--ink);
+}
+.float-pill .dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, oklch(0.78 0.22 45), oklch(0.55 0.18 50));
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.25),
+    0 0 8px oklch(0.72 0.22 45 / 0.5);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: white;
+  margin: 0;
+  flex-shrink: 0;
 }
 
 /* ── Extra chart palette — para gráficos multi-série ── */
@@ -1188,7 +1452,21 @@ button {
 }
 
 /* ─── UTILITY ─── */
-.mono { font-family: var(--font-mono); }
+/* .mono — semantic tag for "this is data/code with column alignment".
+   Now uses Inter (sans) with tabular-nums + lining-nums + clean (non-slashed)
+   zero. Matches Linear/Vercel/Stripe pattern: numbers in sans, alignment via
+   font-feature, NOT actual monospace glyphs (which have slashed zeros that
+   look unprofessional in financial UI). For real code/terminal output, use
+   <code> or <pre> elements which keep their default monospace. */
+.mono {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
+/* Keep <code> and <pre> tags as actual monospace (where slashed zero makes sense) */
+code, pre, kbd, samp {
+  font-family: var(--font-mono);
+}
 .tnum { font-variant-numeric: tabular-nums; }
 .flex { display: flex; }
 .grow { flex: 1; }
@@ -1205,4 +1483,73 @@ button {
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Stagger fade-up entry — for lists of cards/rows.
+   Apply to a container's children. Each child gets a slightly delayed
+   fade-up. Capped at 12 children to avoid CPU cost on long lists. */
+.stagger-fade-up > * {
+  animation: fadeUp 380ms cubic-bezier(.2,.8,.2,1) both;
+  opacity: 0;
+}
+.stagger-fade-up > *:nth-child(1)  { animation-delay: 0ms;   }
+.stagger-fade-up > *:nth-child(2)  { animation-delay: 35ms;  }
+.stagger-fade-up > *:nth-child(3)  { animation-delay: 70ms;  }
+.stagger-fade-up > *:nth-child(4)  { animation-delay: 105ms; }
+.stagger-fade-up > *:nth-child(5)  { animation-delay: 140ms; }
+.stagger-fade-up > *:nth-child(6)  { animation-delay: 175ms; }
+.stagger-fade-up > *:nth-child(7)  { animation-delay: 210ms; }
+.stagger-fade-up > *:nth-child(8)  { animation-delay: 245ms; }
+.stagger-fade-up > *:nth-child(9)  { animation-delay: 280ms; }
+.stagger-fade-up > *:nth-child(10) { animation-delay: 315ms; }
+.stagger-fade-up > *:nth-child(11) { animation-delay: 350ms; }
+.stagger-fade-up > *:nth-child(12) { animation-delay: 385ms; }
+/* Beyond 12, all share the last delay — no point making the user wait longer */
+.stagger-fade-up > *:nth-child(n+13) { animation-delay: 385ms; }
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .stagger-fade-up > * {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ── Row chevron — animated indicator inside list-card rows.
+   Translates +2px on parent .card hover (defined in .card hover rule). */
+.row-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-4);
+  transition:
+    color 240ms cubic-bezier(.2,.8,.2,1),
+    transform 240ms cubic-bezier(.2,.8,.2,1);
+}
+
+/* ── Sparkline draw-in animation — line strokes from start to end on mount.
+   stroke-dasharray of 4000 covers any reasonable sparkline length. The dashoffset
+   shifts from 4000 (invisible, all gap) to 0 (fully drawn). */
+@keyframes sparkLineDraw {
+  from { stroke-dashoffset: 4000; }
+  to   { stroke-dashoffset: 0; }
+}
+.spark-line-anim {
+  stroke-dasharray: 4000;
+  stroke-dashoffset: 4000;
+  animation: sparkLineDraw 1100ms cubic-bezier(.2,.8,.2,1) 80ms forwards;
+}
+@keyframes sparkAreaFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.spark-area-anim {
+  opacity: 0;
+  animation: sparkAreaFade 800ms cubic-bezier(.2,.8,.2,1) 600ms forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spark-line-anim, .spark-area-anim {
+    animation: none;
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
 }

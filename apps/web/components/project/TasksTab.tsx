@@ -248,7 +248,7 @@ export function TasksTab({ slug }: { slug: string }) {
         <SkeletonList />
       )}
       {tasksQ.isError && (
-        <div className="card" style={{ padding: 14, borderLeft: "3px solid var(--neg)", marginTop: 16 }}>
+        <div className="card" style={{ padding: 14, marginTop: 16 }}>
           <strong>Erro ao carregar.</strong>
           <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{(tasksQ.error as Error)?.message}</div>
         </div>
@@ -472,7 +472,6 @@ function KanbanCard({ task, onEdit, onDelete }: {
         position: "relative",
         background: "var(--surface-2)",
         border: "1px solid var(--border)",
-        borderLeft: `3px solid ${priCfg.color}`,
         borderRadius: 6,
         padding: "9px 10px 9px 10px",
         cursor: "grab",
