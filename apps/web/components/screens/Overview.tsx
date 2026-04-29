@@ -576,13 +576,11 @@ function buildKpis(
   // CTR diário real (clicks/impressions * 100), não usa impSeries como proxy.
   const ctrSeries = series.map((p) => (p.impressions > 0 ? (p.clicks / p.impressions) * 100 : 0));
 
-  const d = o.deltas;
-  // compareOverride (custom range) substitui previous_period default quando
-  // setado. Quando custom esta ativo, deltas server-side nao se aplicam (foram
-  // calculados contra previous_period diferente) — recalculamos client-side via
-  // ratio() abaixo. Por isso, com compareOverride, ignoramos d.* e usamos ratio.
+  // Sempre recalculamos delta client-side via ratio(): backend retorna delta
+  // ja em percentual (* 100), mas DeltaChip multiplica por 100 — gerava bug
+  // de 100x maior. ratio() retorna decimal (0.1233 = 12.33%) consistente com
+  // o que DeltaChip espera.
   const prev = compareOverride ?? o.previous_period;
-  const usingCustomCompare = !!compareOverride;
   const roasLabel = effectiveRoas > 0 ? `${effectiveRoas.toFixed(2)}x` : "—";
 
   // Previous-period values pra comparacao. Quando usingTrackcore* esta ativo,
@@ -610,7 +608,7 @@ function buildKpis(
       prevValue: fmtBRL(prev.spend),
       prevSeries: prevSpendSeries,
       unit: "BRL",
-      delta: usingCustomCompare ? ratio(o.spend, prev.spend) : (d.spend ?? ratio(o.spend, prev.spend)),
+      delta: ratio(o.spend, prev.spend),
       deltaSemantic: "neutral",
       series: spendSeries,
       format: fmtBRL,
@@ -621,7 +619,7 @@ function buildKpis(
       prevValue: fmtIntCompact(prev.messages),
       prevSeries: prevMsgSeries,
       unit: "",
-      delta: usingCustomCompare ? ratio(o.messages, prev.messages) : (d.messages ?? ratio(o.messages, prev.messages)),
+      delta: ratio(o.messages, prev.messages),
       deltaSemantic: "up_better",
       series: msgSeries,
       format: (v) => fmtIntCompact(Math.round(v)),
@@ -632,7 +630,7 @@ function buildKpis(
       prevValue: fmtIntCompact(prev.leads),
       prevSeries: prevLeadSeries,
       unit: "",
-      delta: usingCustomCompare ? ratio(o.leads, prev.leads) : (d.leads ?? ratio(o.leads, prev.leads)),
+      delta: ratio(o.leads, prev.leads),
       deltaSemantic: "up_better",
       series: leadSeries,
       format: (v) => Math.round(v).toLocaleString("pt-BR"),
@@ -680,7 +678,7 @@ function buildKpis(
       prevValue: fmtIntCompact(prev.impressions),
       prevSeries: prevImpSeries,
       unit: "",
-      delta: usingCustomCompare ? ratio(o.impressions, prev.impressions) : (d.impressions ?? ratio(o.impressions, prev.impressions)),
+      delta: ratio(o.impressions, prev.impressions),
       deltaSemantic: "up_better",
       series: impSeries,
       format: (v) => fmtIntCompact(Math.round(v)),
@@ -691,7 +689,7 @@ function buildKpis(
       prevValue: fmtIntCompact(prev.clicks),
       prevSeries: prevClkSeries,
       unit: "",
-      delta: usingCustomCompare ? ratio(o.clicks, prev.clicks) : (d.clicks ?? ratio(o.clicks, prev.clicks)),
+      delta: ratio(o.clicks, prev.clicks),
       deltaSemantic: "up_better",
       series: clkSeries,
       format: (v) => fmtIntCompact(Math.round(v)),
@@ -702,7 +700,7 @@ function buildKpis(
       prevValue: fmtPct(prev.ctr),
       prevSeries: prevCtrSeries,
       unit: "%",
-      delta: usingCustomCompare ? ratio(o.ctr, prev.ctr) : (d.ctr ?? ratio(o.ctr, prev.ctr)),
+      delta: ratio(o.ctr, prev.ctr),
       deltaSemantic: "up_better",
       series: ctrSeries,
       format: (v) => fmtPct(v),
