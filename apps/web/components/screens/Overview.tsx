@@ -101,17 +101,43 @@ export function Overview() {
     [dailyQ.data],
   );
 
-  // Escolhe a melhor métrica de conversão pra overlay no gráfico.
-  // Prioridade: compras > leads > mensagens. Se nada, não mostra.
-  const overlay = useMemo(() => {
+  // Multi-line chart overlays: cada metrica conversiva ganha sua propria linha
+  // SOLIDA com cor distinta (paleta de dados, nao bate com accent do sistema).
+  // Inclui apenas series com pelo menos 1 ponto > 0 — series totalmente zeradas
+  // sao filtradas pra evitar linhas planas no rodape.
+  const extras = useMemo(() => {
     const rows = dailyQ.data?.series ?? [];
-    const totalPurchases = rows.reduce((s, p) => s + (p.purchases || 0), 0);
-    const totalLeads = rows.reduce((s, p) => s + (p.leads || 0), 0);
+    if (rows.length === 0) return [];
+    const out: { values: number[]; label: string; color: string }[] = [];
+
     const totalMsgs = rows.reduce((s, p) => s + (p.messages || 0), 0);
-    if (totalPurchases > 0) return { label: "Compras", values: rows.map((p) => p.purchases) };
-    if (totalLeads > 0) return { label: "Leads", values: rows.map((p) => p.leads) };
-    if (totalMsgs > 0) return { label: "Mensagens", values: rows.map((p) => p.messages) };
-    return null;
+    if (totalMsgs > 0) {
+      out.push({
+        values: rows.map((p) => p.messages),
+        label: "Conversas iniciadas",
+        color: "var(--data-cyan)",
+      });
+    }
+
+    const totalLeads = rows.reduce((s, p) => s + (p.leads || 0), 0);
+    if (totalLeads > 0) {
+      out.push({
+        values: rows.map((p) => p.leads),
+        label: "Leads",
+        color: "var(--data-violet)",
+      });
+    }
+
+    const totalPurchases = rows.reduce((s, p) => s + (p.purchases || 0), 0);
+    if (totalPurchases > 0) {
+      out.push({
+        values: rows.map((p) => p.purchases),
+        label: "Vendas",
+        color: "var(--data-lime)",
+      });
+    }
+
+    return out;
   }, [dailyQ.data]);
 
   const loading = overviewQ.isLoading || campaignsQ.isLoading || dailyQ.isLoading;
@@ -221,22 +247,20 @@ export function Overview() {
           <span className="tag lime mono">● LIVE · META ADS</span>
         </div>
 
-        {/* Legenda explícita: o gráfico tem 2 linhas em escalas diferentes */}
+        {/* Legenda — uma entrada por linha. Cores da paleta de dados (data-orange,
+            data-cyan, data-lime, data-violet) — solidas, sem tracejado. */}
         {series.length > 1 && (
-          <div style={{ display: "flex", gap: 16, marginTop: 14, fontSize: 11, fontFamily: "var(--font-mono)", color: "rgba(234,231,223,0.75)", letterSpacing: 0.3, position: "relative", zIndex: 1 }}>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-              <span style={{ width: 14, height: 2, background: "var(--lime)", borderRadius: 1 }} />
+          <div style={{ display: "flex", gap: 18, marginTop: 14, flexWrap: "wrap", fontSize: 11, fontFamily: "var(--font-sans)", color: "rgba(255,255,255,0.7)", letterSpacing: 0.2, position: "relative", zIndex: 1 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+              <span style={{ width: 16, height: 2, background: "var(--data-orange)", borderRadius: 1 }} />
               Investimento (R$/dia)
             </span>
-            {overlay && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span style={{
-                  width: 14, height: 2,
-                  background: "repeating-linear-gradient(90deg, var(--citrus) 0 4px, transparent 4px 7px)",
-                }} />
-                {overlay.label} (passa o mouse pra ver o nº)
+            {extras.map((e) => (
+              <span key={e.label} style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+                <span style={{ width: 16, height: 2, background: e.color, borderRadius: 1 }} />
+                {e.label}
               </span>
-            )}
+            ))}
           </div>
         )}
 
@@ -244,18 +268,14 @@ export function Overview() {
           {series.length > 1 ? (
             <BigChart
               series={series}
-              compare={overlay?.values}
+              extras={extras}
               labels={dateLabels}
               seriesLabel="Investimento"
               seriesFormat={(v) => fmtBRL(v)}
-              compareLabel={overlay?.label}
-              compareFormat={(v) => Math.round(v).toLocaleString("pt-BR")}
-              height={220}
-              lineColor="var(--lime)"
-              fillColor="oklch(0.90 0.22 125 / 0.18)"
-              compareColor="var(--citrus)"
-              axisColor="rgba(234,231,223,0.45)"
-              gridColor="rgba(234,231,223,0.08)"
+              height={240}
+              lineColor="var(--data-orange)"
+              axisColor="rgba(255,255,255,0.45)"
+              gridColor="rgba(255,255,255,0.06)"
             />
           ) : (
             <div style={{

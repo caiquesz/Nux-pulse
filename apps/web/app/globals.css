@@ -59,6 +59,16 @@
   --cobalt-bg:  var(--hero-bg);
   --cobalt-ink: var(--brand-white);
 
+  /* ── Data palette ──
+     Cores SOMENTE para series multiplas em graficos. NAO usar em UI chrome
+     (cards, buttons, borders) — isso quebra o single-accent system.
+     Paleta moderna: warm primary + cool secondary + green outcome. */
+  --data-orange: oklch(0.74 0.20 50);   /* money / cost / spend */
+  --data-cyan:   oklch(0.78 0.16 215);  /* atividade neutra (msgs, cliques) */
+  --data-lime:   oklch(0.84 0.20 145);  /* outcome positivo (vendas, conversoes) */
+  --data-pink:   oklch(0.72 0.22 340);  /* alertas / special */
+  --data-violet: oklch(0.70 0.20 280);  /* comparativo / quinario */
+
   /* typography — referências via variáveis do next/font (definidas no layout.tsx) */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   /* Geist Mono — zero redondo simples (sem barra, sem ponto), moderna. */
