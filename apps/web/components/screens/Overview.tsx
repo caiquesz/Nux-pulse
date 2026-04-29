@@ -354,8 +354,8 @@ export function Overview() {
             <div className="rule" />
           </div>
           <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))",
+            display: "flex",
+            flexDirection: "column",
             gap: 16,
             marginBottom: 28,
           }}>
@@ -930,11 +930,12 @@ function MiniFunnel({
     );
   }
 
-  // Geometria do SVG. viewBox fixo; elemento escala com o container.
-  const VBW = 800;
-  const VBH = 360;
-  const PAD_TOP = 70;     // espaco pro label + icone
-  const PAD_BOT = 56;     // espaco pro valor absoluto + delta
+  // Geometria do SVG. Funil agora full-width (stack vertical em vez de side-by-side),
+  // entao temos espaco lateral pra cada coluna respirar — texto nao corta mais.
+  const VBW = 1200;
+  const VBH = 380;
+  const PAD_TOP = 76;     // espaco pro label header
+  const PAD_BOT = 72;     // espaco pro value + drop% stack vertical
   const RIVER_AREA_H = VBH - PAD_TOP - PAD_BOT;
   const COL_W = VBW / stages.length;
 
@@ -1010,15 +1011,22 @@ function MiniFunnel({
             <stop offset="0%" stopColor={lineColor} stopOpacity="0.85" />
             <stop offset="100%" stopColor={lineColor} stopOpacity="0.55" />
           </linearGradient>
+          {/* Separator soft fading: transparente top → sutil center → transparente bottom */}
+          <linearGradient id={`sep-grad-${title.replace(/\s+/g, "")}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="white" stopOpacity="0" />
+            <stop offset="35%"  stopColor="white" stopOpacity="0.10" />
+            <stop offset="65%"  stopColor="white" stopOpacity="0.10" />
+            <stop offset="100%" stopColor="white" stopOpacity="0" />
+          </linearGradient>
         </defs>
 
-        {/* Vertical separators (sutis, atras de tudo) */}
+        {/* Vertical separators — gradient fading nas pontas pra ficar discreto */}
         {stages.slice(1).map((_, i) => (
           <line
             key={`sep-${i}`}
-            x1={(i + 1) * COL_W} y1={PAD_TOP - 6}
-            x2={(i + 1) * COL_W} y2={VBH - PAD_BOT + 6}
-            stroke="rgba(255,255,255,0.04)"
+            x1={(i + 1) * COL_W} y1={20}
+            x2={(i + 1) * COL_W} y2={VBH - 20}
+            stroke={`url(#sep-grad-${title.replace(/\s+/g, "")})`}
             strokeWidth={1}
           />
         ))}

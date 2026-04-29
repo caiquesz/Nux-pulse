@@ -77,7 +77,20 @@ def _client_window_metrics(db: Session, client_id: int, since: date, until: date
     )
     api_conv = _aggregate_conversions(conv_rows)
     manual = aggregate_manuals(db, client_id, since, until)
-    revenue = round(api_conv["revenue"] + manual["revenue"], 2)
+
+    # Smart fallback (espelha logica do Overview frontend) — escolhe UMA fonte
+    # de revenue por cliente em vez de somar (que dobrava-contava quando Pixel
+    # CAPI + Trackcore disparam pra mesma venda).
+    #   - Trackcore confiavel quando: cobre >= 40% do Pixel OU Pixel < R$ 100
+    #     (sem Pixel forte pra contradizer)
+    #   - Senao usa Pixel (Trackcore eh parcial — caso classico Comtex onde so
+    #     1 de 4 vendas chegou via webhook)
+    pixel_revenue = float(api_conv["revenue"])
+    trackcore_revenue = float(manual["revenue"])
+    coverage = trackcore_revenue / pixel_revenue if pixel_revenue > 0 else 0
+    trackcore_reliable = trackcore_revenue > 0 and (coverage >= 0.4 or pixel_revenue < 100)
+    revenue = round(trackcore_revenue if trackcore_reliable else pixel_revenue, 2)
+
     return {
         "spend": round(spend, 2),
         "revenue": revenue,
@@ -142,16 +155,22 @@ def _client_daily_series(db: Session, client_id: int, since: date, until: date) 
     )
     manual_revenue_by_date: dict[date, float] = {d: float(r or 0) for d, r in manual_rows}
 
+    # Smart fallback (mesma logica do _client_window_metrics) — escolhe UMA
+    # fonte de revenue pra janela inteira em vez de somar daily. Se Trackcore
+    # eh confiavel no agregado, daily usa so manual; senao usa so pixel.
+    pixel_total = sum(api_revenue_by_date.values())
+    manual_total = sum(manual_revenue_by_date.values())
+    coverage = manual_total / pixel_total if pixel_total > 0 else 0
+    use_manual = manual_total > 0 and (coverage >= 0.4 or pixel_total < 100)
+    revenue_source = manual_revenue_by_date if use_manual else api_revenue_by_date
+
     out: list[dict] = []
     cur = since
     while cur <= until:
         out.append({
             "date": cur.isoformat(),
             "spend": round(spend_by_date.get(cur, 0.0), 2),
-            "revenue": round(
-                api_revenue_by_date.get(cur, 0.0) + manual_revenue_by_date.get(cur, 0.0),
-                2,
-            ),
+            "revenue": round(revenue_source.get(cur, 0.0), 2),
         })
         cur += timedelta(days=1)
     return out
