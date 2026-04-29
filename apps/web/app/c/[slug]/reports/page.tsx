@@ -391,10 +391,12 @@ export default function ReportsPage() {
       <style jsx global>{`
         @media print {
           /* ═══════════════════════════════════════════════════════════════
-             RELATORIO PROFISSIONAL — RESET AGRESSIVO + TEMA LIGHT
+             RELATORIO PDF PROFISSIONAL
+             Estrategia: flip CSS variables dark→light + hide chrome.
+             Padrao MDN/W3C — mais robusto que sobrescrever cada bg inline.
              ═══════════════════════════════════════════════════════════════ */
 
-          /* 1. Preservar cores fixas (hero gradient, brand colors) */
+          /* 1. Preservar cores (gradients, brand) e box-sizing universal */
           *, *::before, *::after {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
@@ -402,22 +404,41 @@ export default function ReportsPage() {
             box-sizing: border-box !important;
           }
 
-          /* 2. Esconder chrome da app */
+          /* 2. FLIP CSS vars dark→light. Cobre TODOS os componentes que usam
+                var(--surface), var(--ink), etc. sem precisar override-inline. */
+          :root,
+          [data-theme="dark"],
+          [data-theme="light"] {
+            --bg:        #ffffff !important;
+            --surface:   #fafaf6 !important;
+            --surface-2: #f3f3eb !important;
+            --surface-3: #e9e9df !important;
+            --surface-hi: #ffffff !important;
+            --ink:       #1a1a1a !important;
+            --ink-2:     #3a3835 !important;
+            --ink-3:     #6b6b66 !important;
+            --ink-4:     #a0a09b !important;
+            --border:    #e5e5e0 !important;
+            --border-2:  #d5d5cf !important;
+            --border-hi: #f5f5f0 !important;
+            --hover:     rgba(0,0,0,0.04) !important;
+            --active:    rgba(0,0,0,0.08) !important;
+            --pos:       #2d8f4d !important;
+            --neg:       #c0413a !important;
+            --warn:      #c8881e !important;
+            --info:      #3070a8 !important;
+            --hero:      #c25a1f !important;
+            --card-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 1px 3px rgba(0,0,0,0.04) !important;
+          }
+
+          /* 3. Esconder chrome */
           .sidebar, .topbar, .page-head, .no-print,
           .sb-badge, nav, aside.sidebar { display: none !important; }
 
-          /* 3. RESET BG em TUDO exceto hero — backgrounds dark do dashboard
-                vazavam pra outros containers e geravam faixas pretas. */
-          html, body, .app, .app[data-sidebar],
-          .main, .page, .report-doc,
-          .report-doc > div:last-child,
-          .report-doc > div:last-child > section {
-            background: #ffffff !important;
-            background-image: none !important;
-            color: #1a1a1a !important;
-          }
-
+          /* 4. RESET layout — sem height heredada de 100vh, sem grid 240px */
           html, body {
+            background: #ffffff !important;
+            color: #1a1a1a !important;
             margin: 0 !important;
             padding: 0 !important;
             height: auto !important;
@@ -425,12 +446,14 @@ export default function ReportsPage() {
             overflow: visible !important;
           }
           .app, .app[data-sidebar] {
+            background: #ffffff !important;
             display: block !important;
             grid-template-columns: 1fr !important;
             height: auto !important;
             overflow: visible !important;
           }
           .main, .page {
+            background: #ffffff !important;
             padding: 0 !important;
             margin: 0 !important;
             max-width: 100% !important;
@@ -438,136 +461,107 @@ export default function ReportsPage() {
             overflow: visible !important;
           }
 
-          /* 4. Container do relatorio — strict A4 width, sem overflow */
+          /* 5. report-doc — strict A4 width + clip overflow */
           .report-doc {
+            background: #ffffff !important;
+            color: #1a1a1a !important;
             border: none !important;
+            border-radius: 0 !important;
             padding: 0 !important;
+            margin: 0 !important;
             max-width: 100% !important;
             width: 100% !important;
-            margin: 0 !important;
-            padding-bottom: 0 !important;
-            margin-bottom: 0 !important;
-            display: block !important;
             overflow: hidden !important;
+            display: block !important;
+          }
+          .report-doc > div:last-child {
+            background: #ffffff !important;
+            border: none !important;
+            border-radius: 0 !important;
+            padding: 28px 24px !important;
+            gap: 22px !important;
           }
 
-          /* 5. HERO (capa) — DARK, mantido como cover */
+          /* 6. HERO mantem DARK como capa */
           .report-hero {
             border-radius: 0 !important;
-            padding: 32px 32px 28px !important;
+            padding: 32px 28px 26px !important;
             page-break-after: avoid !important;
             background: #0a0a0a !important;
             color: #f5f5f5 !important;
           }
-          .report-hero h1, .report-hero h2, .report-hero h3 { color: #f5f5f5 !important; }
-          .report-hero * { color: inherit; }
-          .report-hero h1 { font-size: 30px !important; margin-bottom: 6px !important; color: #f5f5f5 !important; }
-          .report-hero > div:last-child { font-size: 15px !important; margin-top: 16px !important; }
+          .report-hero, .report-hero * {
+            color: inherit !important;
+          }
+          .report-hero h1 {
+            font-size: 30px !important;
+            margin-bottom: 6px !important;
+            color: #f5f5f5 !important;
+          }
+          .report-hero strong { color: #ffae6f !important; }  /* destaque laranja claro pra capa */
 
-          /* 6. BODY (corpo) padding e gap */
-          .report-doc > div:last-child {
-            border: none !important;
-            border-radius: 0 !important;
-            padding: 28px 28px !important;
-            gap: 24px !important;
-          }
-
-          /* 7. TEXT colors — tudo escuro, secundarios cinza medio */
-          .report-doc > div:last-child *,
-          .report-doc > div:last-child h1,
-          .report-doc > div:last-child h2,
-          .report-doc > div:last-child h3,
-          .report-doc > div:last-child p,
-          .report-doc > div:last-child strong {
-            color: #1a1a1a !important;
-          }
-          .report-doc > div:last-child [class*="mono"]:not([style*="color"]),
-          .report-doc > div:last-child .muted,
-          .report-doc > div:last-child .dim {
-            color: #6b6b66 !important;
-          }
-
-          /* 8. CARDS/CONTAINERS do body — cream bg + border light */
-          .report-doc > div:last-child section > div,
-          .report-doc > div:last-child section > div[style*="grid"] > div,
-          .report-doc > div:last-child [class*="card"]:not(.report-hero),
-          .report-doc > div:last-child [style*="surface"],
-          .report-doc > div:last-child [style*="--surface"] {
-            background: #fafaf6 !important;
-            background-image: none !important;
-            border-color: #e5e5e0 !important;
-            color: #1a1a1a !important;
-          }
-          /* Border do divider grid no apêndice (era var(--border) dark) */
-          .report-doc > div:last-child [style*="background: var(--border)"] {
-            background: #e5e5e0 !important;
-          }
-
-          /* 9. PAGE BREAKS — chart + funnel comecam em pagina nova (clean) */
+          /* 7. PAGE BREAKS — chart e funnel sempre em pagina nova */
           section.report-page-break-before {
             page-break-before: always !important;
             break-before: page !important;
           }
-          /* Pequenos blocos: nao cortar */
+          .report-hero { page-break-after: avoid !important; }
+          /* Pequenos blocos nao cortam */
           [class*="card"],
-          section h2 + div,
+          section > div[style*="grid"],
           .grid {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
           }
-          /* Section pode quebrar entre conteudos, mas nao no meio de card */
+          /* Section pode dividir; subitens nao */
           section {
             break-inside: auto !important;
             page-break-inside: auto !important;
             margin-top: 0 !important;
           }
 
-          /* 10. SVGs escalam */
+          /* 8. SVGs escalam pro container (largura A4) */
           .report-doc svg {
             width: 100% !important;
             max-width: 100% !important;
             height: auto !important;
           }
-
-          /* 11. Charts text/lines colors pra tema light */
-          .report-doc > div:last-child text {
-            fill: #4a4a45 !important;
-            stroke: none !important;
-          }
-          .report-doc > div:last-child line {
-            stroke: #d0d0cb !important;
+          /* BigChart wrap min-height pra ResizeObserver nao colapsar */
+          .report-doc > div:last-child [style*="position: relative"][style*="height"] {
+            min-height: 220px !important;
           }
 
-          /* 12. APENDICE grid — fit A4 width, evitar overflow direita */
-          .report-doc > div:last-child [style*="grid-template-columns: repeat(3"] {
+          /* 9. APENDICE grid — fit A4 width strict, sem overflow direita */
+          .report-doc [style*="grid-template-columns: repeat(3"] {
             grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
             width: 100% !important;
+            max-width: 100% !important;
           }
-          /* Tiny cards nao podem ter min-width forcado */
-          .report-doc > div:last-child [style*="grid"] > div {
+          /* Children dos grids: min-width:0 pra deixar flex-basis funcionar */
+          .report-doc [style*="grid"] > * {
             min-width: 0 !important;
             max-width: 100% !important;
-            overflow: hidden !important;
+          }
+          /* Hint text dos Tiny cards quebra linha em vez de overflow */
+          .report-doc [style*="grid"] > * div {
             word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
           }
 
-          /* 13. @page A4 */
+          /* 10. FUNNEL bars row — labels 160px (era 180), gap 10px (era 12) */
+          .report-doc [style*="grid-template-columns: 180px"] {
+            grid-template-columns: 160px 1fr 100px !important;
+            gap: 10px !important;
+          }
+
+          /* 11. @page A4 */
           @page {
             size: A4;
             margin: 12mm 10mm;
           }
           @page :first {
-            margin: 0;
+            margin: 0;  /* hero borderless na pagina 1 */
           }
-
-          /* 14. Eliminar trailing blank page — sem height heredado de 100vh */
-          html, body, .app, .main, .page,
-          .report-doc, .report-doc > div:last-child {
-            height: auto !important;
-            min-height: 0 !important;
-            overflow: visible !important;
-          }
-          .report-doc { overflow: hidden !important; }  /* re-aplica overflow:hidden so no doc */
         }
       `}</style>
     </>
