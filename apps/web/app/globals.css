@@ -1401,6 +1401,13 @@ button.card:hover .row-chevron {
   transition: background 120ms, color 120ms, box-shadow 120ms;
   margin: 0;
 }
+/* Remove o focus ring azul nativo do browser e substitui por nada
+   — a selecao ja e visualmente clara via bg. Mantem cursor: pointer. */
+.rdp-day_button:focus,
+.rdp-day_button:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
 .rdp-day_button:hover:not(:disabled) {
   background: var(--surface-2);
   color: var(--ink);
@@ -1413,38 +1420,53 @@ button.card:hover .row-chevron {
   box-shadow: inset 0 0 0 1.5px var(--hero);
 }
 
-/* Selecao single (sem range) — pill solido em --hero */
-.rdp-selected:not(.rdp-range_middle):not(.rdp-range_end) .rdp-day_button,
-.rdp-day_button.rdp-selected {
+/* RANGE MINIMALISTA — Stripe/Linear-style:
+   Em vez de endpoints solid bright + middle marrom, todo o range
+   compartilha a mesma tint sutil. Endpoints distinguidos so por:
+   - peso de texto (700 nos endpoints, 500 no middle)
+   - cor do texto (--hero nos endpoints, --ink no middle)
+   - canto arredondado pra fora do range
+   Resultado: leitura limpa, sem contraste agressivo. */
+
+/* Single-day selecao (so 1 dia clicado) — pill solido em --hero */
+.rdp-day_button.rdp-selected:not(.rdp-range_middle):not(.rdp-range_start):not(.rdp-range_end) {
   background: var(--hero) !important;
   color: var(--accent-ink) !important;
-  font-weight: 600;
+  font-weight: 700;
   border-radius: 6px;
 }
 
-/* Range middle — bg sutil em tint do --hero (~18% opacity sobre surface).
-   border-radius 0 conecta visualmente com endpoints na MESMA linha. */
+/* Range middle — bg sutil; conecta visualmente */
 .rdp-range_middle .rdp-day_button {
-  background: color-mix(in oklch, var(--hero) 18%, var(--surface)) !important;
+  background: color-mix(in oklch, var(--hero) 14%, var(--surface)) !important;
   color: var(--ink) !important;
   border-radius: 0 !important;
   font-weight: 500;
 }
 .rdp-range_middle .rdp-day_button:hover:not(:disabled) {
-  background: color-mix(in oklch, var(--hero) 26%, var(--surface)) !important;
+  background: color-mix(in oklch, var(--hero) 22%, var(--surface)) !important;
 }
 
-/* Endpoints: solid laranja, com canto arredondado VOLTADO PRA FORA do range */
+/* Endpoints — bg um pouco mais saturado pra marcar inicio/fim
+   sem virar pill solido brilhante. Texto em --hero peso 700. */
 .rdp-range_start .rdp-day_button,
 .rdp-range_end .rdp-day_button {
-  background: var(--hero) !important;
-  color: var(--accent-ink) !important;
+  background: color-mix(in oklch, var(--hero) 26%, var(--surface)) !important;
+  color: var(--hero) !important;
   font-weight: 700;
+}
+.rdp-range_start .rdp-day_button:hover:not(:disabled),
+.rdp-range_end .rdp-day_button:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--hero) 34%, var(--surface)) !important;
 }
 .rdp-range_start .rdp-day_button { border-radius: 6px 0 0 6px !important; }
 .rdp-range_end .rdp-day_button   { border-radius: 0 6px 6px 0 !important; }
-/* Edge case: range com 1 dia so (start === end) — pill completo */
-.rdp-range_start.rdp-range_end .rdp-day_button { border-radius: 6px !important; }
+/* Edge case: range com 1 dia so (start === end) */
+.rdp-range_start.rdp-range_end .rdp-day_button {
+  border-radius: 6px !important;
+  background: var(--hero) !important;
+  color: var(--accent-ink) !important;
+}
 
 /* Quando o middle bate em final/inicio de semana, mostra o bg ate a borda
    da semana (o button preenche 100% da cell ja) */
@@ -1456,23 +1478,37 @@ button.card:hover .row-chevron {
 }
 .rdp-outside { color: var(--ink-4); opacity: 0.4; }
 
-/* Navegacao prev/next — botoes pill clean */
-.rdp-nav button {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--ink-3);
-  border: 1px solid var(--border);
-  cursor: pointer;
-  transition: background 120ms, color 120ms, border-color 120ms;
+/* Navegacao prev/next — botoes pill neutros, sem outline azul.
+   Specificity bumpada (.rdp-root) pra prevalecer sobre estilos internos
+   da lib v9. */
+.rdp-root .rdp-nav button,
+.rdp-root .rdp-button_previous,
+.rdp-root .rdp-button_next {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: var(--ink-3) !important;
+  border: 1px solid var(--border) !important;
+  cursor: pointer !important;
+  transition: background 120ms, color 120ms, border-color 120ms !important;
+  outline: none !important;
 }
-.rdp-nav button:hover {
-  background: var(--surface-2);
-  color: var(--ink);
-  border-color: var(--border-2);
+.rdp-root .rdp-nav button:hover,
+.rdp-root .rdp-button_previous:hover,
+.rdp-root .rdp-button_next:hover {
+  background: var(--surface-2) !important;
+  color: var(--ink) !important;
+  border-color: var(--border-2) !important;
 }
-.rdp-chevron { fill: currentColor; }
+.rdp-root .rdp-nav button:focus,
+.rdp-root .rdp-nav button:focus-visible,
+.rdp-root .rdp-button_previous:focus,
+.rdp-root .rdp-button_next:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+.rdp-chevron { fill: currentColor !important; }
 
 /* Pill do trigger quando tem range ativo: destacada */
 .pill.active { border-color: var(--ink); color: var(--ink); }
