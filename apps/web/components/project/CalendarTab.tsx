@@ -118,43 +118,56 @@ export function CalendarTab({ slug }: { slug: string }) {
 
   return (
     <div>
-      {/* ── HEADER ──────────────────────────────────────────────── */}
+      {/* ── HEADER — toolbar compacta, Linear-style ──────────────────── */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        marginBottom: 16, flexWrap: "wrap", gap: 12,
+        marginBottom: 12, flexWrap: "wrap", gap: 10,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
             <h2 style={{
-              fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em",
-              textTransform: "capitalize", margin: 0,
+              fontSize: 17, fontWeight: 700, letterSpacing: "-0.015em",
+              textTransform: "capitalize", margin: 0, color: "var(--ink)",
             }}>
               {MONTH_NAMES[cursor.getMonth()]}
             </h2>
             <span style={{
-              fontSize: 20, fontWeight: 400, color: "var(--ink-4)",
-              letterSpacing: "-0.01em",
+              fontSize: 15, fontWeight: 400, color: "var(--ink-4)",
+              letterSpacing: "-0.005em",
             }}>
               {cursor.getFullYear()}
             </span>
           </div>
           {monthTotal > 0 && (
             <span className="mono" style={{
-              fontSize: 11, color: "var(--ink-3)", letterSpacing: 0.3,
-              background: "var(--surface-2)", padding: "3px 8px", borderRadius: 999,
+              fontSize: 10.5, color: "var(--ink-3)", letterSpacing: 0.3,
             }}>
               {monthTotal} {monthTotal === 1 ? "tarefa" : "tarefas"}
             </span>
           )}
+          {/* Legenda inline — deixou de ser bloco no rodape */}
+          <div className="mono" style={{
+            display: "flex", alignItems: "center", gap: 10,
+            fontSize: 9.5, color: "var(--ink-4)", letterSpacing: 0.3,
+            paddingLeft: 14, marginLeft: 2,
+            borderLeft: "1px solid var(--border)",
+          }}>
+            {(["todo", "doing", "waiting", "done"] as const).map((s) => (
+              <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 5, height: 5, background: STATUS[s].color, borderRadius: "50%" }} />
+                {STATUS[s].label}
+              </span>
+            ))}
+          </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <button
             onClick={() => setCursor(addMonths(cursor, -1))}
             aria-label="Mês anterior"
             className="cal-nav"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <button
             onClick={() => setCursor(startOfMonth(new Date()))}
@@ -169,9 +182,9 @@ export function CalendarTab({ slug }: { slug: string }) {
             aria-label="Próximo mês"
             className="cal-nav"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
-          <div style={{ width: 1, height: 22, background: "var(--border)", margin: "0 6px" }} />
+          <div style={{ width: 1, height: 18, background: "var(--border)", margin: "0 6px" }} />
           <button
             className="btn"
             onClick={() => setCreating({ dateISO: keyOf(today) })}
@@ -181,14 +194,13 @@ export function CalendarTab({ slug }: { slug: string }) {
         </div>
       </div>
 
-      {/* ── GRID HEADER (dias da semana) ───────────────────────────── */}
+      {/* ── GRID HEADER (dias da semana) — clean, sem bg pillzudo ─── */}
       <div style={{
         display: "grid", gridTemplateColumns: "repeat(7, 1fr)",
-        background: "var(--surface-2)",
-        border: "1px solid var(--border)",
-        borderBottom: "none",
-        borderRadius: "10px 10px 0 0",
-        overflow: "hidden",
+        borderTop: "1px solid var(--border)",
+        borderLeft: "1px solid var(--border)",
+        borderRight: "1px solid var(--border)",
+        borderRadius: "8px 8px 0 0",
       }}>
         {DAY_HEADERS.map((d, i) => {
           const isWeekend = i >= 5;
@@ -197,11 +209,11 @@ export function CalendarTab({ slug }: { slug: string }) {
               key={d}
               className="mono"
               style={{
-                fontSize: 10, letterSpacing: 1.4,
+                fontSize: 9.5, letterSpacing: 1.2,
                 color: isWeekend ? "var(--ink-4)" : "var(--ink-3)",
                 textTransform: "uppercase", fontWeight: 600,
-                padding: "10px 12px", textAlign: "center",
-                borderRight: i < 6 ? "1px solid var(--border)" : "none",
+                padding: "7px 10px",
+                textAlign: "left",
               }}
             >
               {d}
@@ -216,10 +228,9 @@ export function CalendarTab({ slug }: { slug: string }) {
         gridTemplateColumns: "repeat(7, 1fr)",
         gridAutoRows: "1fr",
         border: "1px solid var(--border)",
-        borderTop: "none",
-        borderRadius: "0 0 10px 10px",
+        borderRadius: "0 0 8px 8px",
         overflow: "hidden",
-        minHeight: 680, // 6 semanas × ~113px
+        minHeight: 540, // 6 semanas × ~90px (era 113)
       }}>
         {cells.map((cell, i) => {
           const k = keyOf(cell.date);
@@ -247,30 +258,19 @@ export function CalendarTab({ slug }: { slug: string }) {
         })}
       </div>
 
-      {/* ── LEGENDA ──────────────────────────────────────────────── */}
-      <div style={{
-        display: "flex", gap: 18, marginTop: 12, fontSize: 10, color: "var(--ink-4)",
-        fontFamily: "var(--font-mono)", letterSpacing: 0.3, flexWrap: "wrap",
-        alignItems: "center",
+      {/* Legenda de prioridade (status ja esta no topo) */}
+      <div className="mono" style={{
+        display: "flex", gap: 14, marginTop: 8, fontSize: 9.5,
+        color: "var(--ink-4)", letterSpacing: 0.3, flexWrap: "wrap",
+        alignItems: "center", paddingLeft: 2,
       }}>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <span style={{ color: "var(--ink-3)" }}>Status</span>
-          {(["todo", "doing", "waiting", "done"] as const).map((s) => (
-            <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <span style={{ width: 5, height: 5, background: STATUS[s].color, borderRadius: "50%" }} />
-              {STATUS[s].label}
-            </span>
-          ))}
-        </span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <span style={{ color: "var(--ink-3)" }}>Prioridade</span>
-          {(["urgente", "alta", "media", "baixa"] as const).map((p) => (
-            <span key={p} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <span style={{ width: 2, height: 9, background: PRIORITY[p].color, borderRadius: 1 }} />
-              {PRIORITY[p].label}
-            </span>
-          ))}
-        </span>
+        <span style={{ color: "var(--ink-4)" }}>Prioridade</span>
+        {(["urgente", "alta", "media", "baixa"] as const).map((p) => (
+          <span key={p} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <span style={{ width: 2, height: 9, background: PRIORITY[p].color, borderRadius: 1 }} />
+            {PRIORITY[p].label}
+          </span>
+        ))}
       </div>
 
       {/* ── TAREFAS SEM DATA ─────────────────────────────────────── */}
@@ -423,57 +423,48 @@ function DayCell({
       role="button"
       style={{
         position: "relative",
-        minHeight: 112,
-        padding: 6,
-        background: inMonth ? "var(--surface)" : "var(--surface-2)",
+        minHeight: 88, // era 112 — calendario mais compacto
+        padding: 5,
+        // Hoje ganha tint laranja bem sutil; demais usam surface ou surface-2
+        background: isToday
+          ? "color-mix(in oklch, var(--hero) 6%, var(--surface))"
+          : (inMonth ? "var(--surface)" : "var(--surface-2)"),
         borderRight: isLastCol ? "none" : "1px solid var(--border)",
         borderBottom: isLastRow ? "none" : "1px solid var(--border)",
         cursor: "pointer",
         transition: "background .08s",
-        display: "flex", flexDirection: "column", gap: 4,
-        opacity: inMonth ? 1 : 0.5,
+        display: "flex", flexDirection: "column", gap: 3,
+        opacity: inMonth ? 1 : 0.45,
       }}
     >
-      {/* Header da célula: número + plus no hover */}
+      {/* Header da célula: número top-left + plus no hover */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        height: 22, marginBottom: 2,
+        height: 18, marginBottom: 1,
       }}>
-        {isToday ? (
-          <span style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            minWidth: 22, height: 22, padding: "0 6px", borderRadius: 999,
-            border: "1.5px solid var(--hero)",
-            color: "var(--hero)",
-            fontSize: 12, fontWeight: 700, fontFamily: "var(--font-sans)",
-            fontVariantNumeric: "tabular-nums", letterSpacing: 0.2,
-            marginLeft: 2,
-          }}>
-            {date.getDate()}
-          </span>
-        ) : (
-          <span
-            className="mono"
-            style={{
-              fontSize: 12,
-              color: inMonth
-                ? (isWeekend ? "var(--ink-4)" : "var(--ink-2)")
-                : "var(--ink-4)",
-              fontWeight: 500, fontVariantNumeric: "tabular-nums",
-              padding: "0 6px",
-            }}
-          >
-            {date.getDate()}
-          </span>
-        )}
+        <span
+          className="mono"
+          style={{
+            fontSize: 11,
+            color: isToday
+              ? "var(--hero)"
+              : (inMonth ? (isWeekend ? "var(--ink-4)" : "var(--ink-2)") : "var(--ink-4)"),
+            fontWeight: isToday ? 700 : 500,
+            fontVariantNumeric: "tabular-nums",
+            padding: "0 4px",
+            letterSpacing: 0.2,
+          }}
+        >
+          {date.getDate()}
+        </span>
         {hover && inMonth && (
           <span
             onClick={(e) => { e.stopPropagation(); onCreateHere(); }}
             title="Criar tarefa neste dia"
             style={{
-              width: 16, height: 16, borderRadius: 3,
+              width: 14, height: 14, borderRadius: 3,
               background: "var(--surface-2)", border: "1px solid var(--border)",
-              color: "var(--ink-3)", fontSize: 11, lineHeight: 1,
+              color: "var(--ink-3)", fontSize: 10, lineHeight: 1,
               display: "flex", alignItems: "center", justifyContent: "center",
               cursor: "pointer", marginRight: 2,
             }}
@@ -496,9 +487,9 @@ function DayCell({
             className="mono"
             style={{
               textAlign: "left",
-              fontSize: 10, color: "var(--ink-3)", letterSpacing: 0.3,
+              fontSize: 9.5, color: "var(--ink-3)", letterSpacing: 0.3,
               background: "transparent", border: "none", cursor: "pointer",
-              padding: "2px 6px", borderRadius: 3,
+              padding: "1px 5px", borderRadius: 3,
             }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface-2)"; e.currentTarget.style.color = "var(--ink-2)"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--ink-3)"; }}
