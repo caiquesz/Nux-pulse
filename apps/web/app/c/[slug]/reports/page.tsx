@@ -601,23 +601,41 @@ export default function ReportsPage() {
             gap: 22px !important;
           }
 
-          /* 6. HERO mantem DARK como capa */
+          /* 6. HERO mantem DARK como capa — preserva hierarquia editorial.
+                Importante: NAO forcar 'color: inherit' em descendentes — o
+                design usa cores explicitas (cream / accent / soft tints)
+                pra criar hierarquia de leitura. */
           .report-hero {
             border-radius: 0 !important;
-            padding: 32px 28px 26px !important;
+            padding: 56px 44px 44px !important;
             page-break-after: avoid !important;
             background: #0a0a0a !important;
             color: #f5f5f5 !important;
-          }
-          .report-hero, .report-hero * {
-            color: inherit !important;
+            border-bottom: 1px solid #c25a1f !important;  /* hairline accent na base */
           }
           .report-hero h1 {
-            font-size: 30px !important;
-            margin-bottom: 6px !important;
-            color: #f5f5f5 !important;
+            font-size: 44px !important;
+            letter-spacing: -0.025em !important;
+            line-height: 1.0 !important;
+            color: #F5F2EB !important;
+            margin: 0 0 12px !important;
           }
-          .report-hero strong { color: #ffae6f !important; }  /* destaque laranja claro pra capa */
+          /* Pill "RELATÓRIO · PERFORMANCE" — bumpar contraste do border pro print */
+          .report-hero [style*="border: 1px solid rgba(245,242,235"] {
+            border-color: rgba(245,242,235,0.32) !important;
+            color: rgba(245,242,235,0.78) !important;
+          }
+          /* Frase-resumo: garantir que strongs preservem suas cores inline.
+             #F5F2EB (cream/branco) pros R$, #c25a1f (accent) so pra 1 numero-chave.
+             Color fallback explicito caso wildcard rules de outros lugares vazem. */
+          .report-hero strong[style*="#F5F2EB"],
+          .report-hero strong[style*="#f5f2eb"] {
+            color: #F5F2EB !important;
+          }
+          .report-hero strong[style*="var(--hero)"],
+          .report-hero strong[style*="--hero"] {
+            color: #c25a1f !important;
+          }
 
           /* 7. PAGE BREAKS — chart e funnel sempre em pagina nova */
           section.report-page-break-before {
