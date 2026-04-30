@@ -430,7 +430,7 @@ export default function ReportsPage() {
 
           {/* ── APÊNDICE técnico ──────────────────────────────────── */}
           {ov && (
-            <section>
+            <section className="report-appendix-page">
               <SectionHeader num="05" title="Apêndice" subtitle="Métricas técnicas complementares" />
               <div style={{ display: "grid", gap: 18 }}>
                 {/* Cobertura — quanto e quem foi atingido */}
@@ -582,11 +582,7 @@ export default function ReportsPage() {
             page-break-after: avoid !important;
           }
 
-          /* 6. PAGE BREAKS — fluxo 100% natural.
-                Tentativa anterior usava break-inside:avoid em cards/grids,
-                mas isso empurrava blocos grandes (chart, funil) inteiros pra
-                proxima pagina mesmo quando metade caberia, deixando vazios.
-                Agora: deixa o browser paginar onde achar melhor. */
+          /* 6. PAGE BREAKS — fluxo natural + apendice sempre em pagina propria. */
           section.report-page-break-before {
             page-break-before: auto !important;
             break-before: auto !important;
@@ -596,11 +592,15 @@ export default function ReportsPage() {
             page-break-inside: auto !important;
             margin-top: 0 !important;
           }
-          /* So protege cortes em blocos PEQUENOS (1 KPI, 1 bullet do
-             resumo, 1 tile do apendice) — nao em wrappers grandes */
           .report-doc [class*="card"]:not(.report-hero) {
             page-break-inside: auto !important;
             break-inside: auto !important;
+          }
+          /* Apendice (#05) sempre comeca em pagina nova — vira a "ultima pagina"
+             do relatorio, com as metricas tecnicas + rodape juntos. */
+          section.report-appendix-page {
+            page-break-before: always !important;
+            break-before: page !important;
           }
 
           /* 7. SVGs escalam pro container A4 */
