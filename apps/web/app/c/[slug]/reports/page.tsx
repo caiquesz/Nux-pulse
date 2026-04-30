@@ -582,23 +582,32 @@ export default function ReportsPage() {
             page-break-after: avoid !important;
           }
 
-          /* 6. PAGE BREAKS — chart e funnel sempre em pagina nova */
+          /* 6. PAGE BREAKS — fluxo natural.
+                Antes: chart/funnel forcavam break-before:always, deixando
+                meia pagina vazia abaixo do grafico. Agora deixamos o browser
+                paginar naturalmente; so impedimos cortes no meio de cards. */
           section.report-page-break-before {
-            page-break-before: always !important;
-            break-before: page !important;
+            page-break-before: auto !important;
+            break-before: auto !important;
           }
-          /* Pequenos blocos nao cortam ao meio */
+          /* Cards e grids nao cortam ao meio (mantem integridade visual) */
           [class*="card"],
           section > div[style*="grid"],
           .grid {
             break-inside: avoid !important;
             page-break-inside: avoid !important;
           }
-          /* Section pode dividir; subitens nao */
+          /* Sections podem dividir entre paginas, mas o titulo nao orfa */
           section {
             break-inside: auto !important;
             page-break-inside: auto !important;
             margin-top: 0 !important;
+          }
+          /* Section header (numero + titulo + subtitulo) nao deve ficar
+             sozinho no fim da pagina sem o conteudo abaixo */
+          section > div:first-child {
+            break-after: avoid !important;
+            page-break-after: avoid !important;
           }
 
           /* 7. SVGs escalam pro container A4 */
