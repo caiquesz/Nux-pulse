@@ -489,16 +489,17 @@ function FileTile({ file, onDelete }: { file: ClientFile; onDelete: () => void }
               </div>
             </div>
           )}
-          {/* Categoria badge */}
+          {/* Categoria badge — fundo claro fixo, texto dark fixo (legivel em ambos os temas).
+              Usar var(--ink-2) aqui quebraria no dark mode pq seria texto claro em fundo claro. */}
           <span style={{
             position: "absolute", top: 8, left: 8,
             display: "inline-flex", alignItems: "center", gap: 4,
             fontSize: 9, padding: "3px 8px",
-            background: "rgba(250,250,248,0.92)",
-            color: "var(--ink-2)",
+            background: "rgba(250,250,248,0.95)",
+            color: "#1a1a1a",
             borderRadius: 999, fontFamily: "var(--font-mono)", letterSpacing: 0.4,
-            textTransform: "uppercase", fontWeight: 600,
-            border: "1px solid rgba(10,10,8,0.08)",
+            textTransform: "uppercase", fontWeight: 700,
+            border: "1px solid rgba(10,10,8,0.10)",
           }}>
             <span style={{ width: 5, height: 5, borderRadius: "50%", background: cat.color }} />
             {cat.label}
@@ -506,11 +507,11 @@ function FileTile({ file, onDelete }: { file: ClientFile; onDelete: () => void }
           {file.external_url && (
             <span style={{
               position: "absolute", top: 8, right: 8,
-              background: "rgba(250,250,248,0.92)", borderRadius: 999,
+              background: "rgba(250,250,248,0.95)", borderRadius: 999,
               padding: "3px 7px", fontSize: 9,
-              color: "var(--ink-2)", fontFamily: "var(--font-mono)", letterSpacing: 0.4,
-              textTransform: "uppercase", fontWeight: 600,
-              border: "1px solid rgba(10,10,8,0.08)",
+              color: "#1a1a1a", fontFamily: "var(--font-mono)", letterSpacing: 0.4,
+              textTransform: "uppercase", fontWeight: 700,
+              border: "1px solid rgba(10,10,8,0.10)",
             }}>
               ↗ link
             </span>
