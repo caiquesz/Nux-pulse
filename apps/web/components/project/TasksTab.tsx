@@ -547,17 +547,26 @@ function KanbanBoard({
   return (
     <div style={{
       display: "grid",
+      // gap=0: o respiro entre colunas vem do padding interno + linha sutil.
       gridTemplateColumns: "repeat(4, minmax(260px, 1fr))",
-      gap: 12,
+      gap: 0,
       minHeight: "calc(100vh - 280px)",
       alignItems: "stretch",
       overflowX: "auto",
       paddingBottom: 2,
     }}>
-      {STATUS_ORDER.map((st) => {
+      {STATUS_ORDER.map((st, i) => {
         const col = tasks.filter((t) => t.status === st);
+        const isLast = i === STATUS_ORDER.length - 1;
         return (
-          <KanbanColumn key={st} status={st} tasks={col} onEdit={onEdit} onDelete={onDelete} />
+          <KanbanColumn
+            key={st}
+            status={st}
+            tasks={col}
+            isLast={isLast}
+            onEdit={onEdit}
+            onDelete={onDelete}
+          />
         );
       })}
     </div>
@@ -565,10 +574,11 @@ function KanbanBoard({
 }
 
 function KanbanColumn({
-  status, tasks, onEdit, onDelete,
+  status, tasks, isLast, onEdit, onDelete,
 }: {
   status: TaskStatus;
   tasks: Task[];
+  isLast: boolean;
   onEdit: (t: Task) => void;
   onDelete: (id: number) => void;
 }) {
@@ -579,17 +589,21 @@ function KanbanColumn({
       ref={setNodeRef}
       style={{
         display: "flex", flexDirection: "column", minHeight: 0,
-        borderRadius: 10,
+        // Padding interno gera respiro nas duas laterais da divisória vertical.
+        padding: "0 16px",
         background: isOver ? "var(--surface-2)" : "transparent",
         outline: isOver ? `1px dashed ${cfg.color}` : "1px dashed transparent",
         outlineOffset: -1,
+        borderRadius: 8,
+        // Linha sutil entre colunas (todas exceto a última).
+        borderRight: isLast ? "none" : "1px solid var(--border)",
         transition: "background .12s, outline-color .12s",
       }}
     >
       {/* Header — Linear-style: dot · label · count em ink-3 */}
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
-        padding: "4px 6px 10px",
+        padding: "4px 0 10px",
       }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color, flexShrink: 0 }} />
         <span style={{
