@@ -582,32 +582,25 @@ export default function ReportsPage() {
             page-break-after: avoid !important;
           }
 
-          /* 6. PAGE BREAKS — fluxo natural.
-                Antes: chart/funnel forcavam break-before:always, deixando
-                meia pagina vazia abaixo do grafico. Agora deixamos o browser
-                paginar naturalmente; so impedimos cortes no meio de cards. */
+          /* 6. PAGE BREAKS — fluxo 100% natural.
+                Tentativa anterior usava break-inside:avoid em cards/grids,
+                mas isso empurrava blocos grandes (chart, funil) inteiros pra
+                proxima pagina mesmo quando metade caberia, deixando vazios.
+                Agora: deixa o browser paginar onde achar melhor. */
           section.report-page-break-before {
             page-break-before: auto !important;
             break-before: auto !important;
           }
-          /* Cards e grids nao cortam ao meio (mantem integridade visual) */
-          [class*="card"],
-          section > div[style*="grid"],
-          .grid {
-            break-inside: avoid !important;
-            page-break-inside: avoid !important;
-          }
-          /* Sections podem dividir entre paginas, mas o titulo nao orfa */
           section {
             break-inside: auto !important;
             page-break-inside: auto !important;
             margin-top: 0 !important;
           }
-          /* Section header (numero + titulo + subtitulo) nao deve ficar
-             sozinho no fim da pagina sem o conteudo abaixo */
-          section > div:first-child {
-            break-after: avoid !important;
-            page-break-after: avoid !important;
+          /* So protege cortes em blocos PEQUENOS (1 KPI, 1 bullet do
+             resumo, 1 tile do apendice) — nao em wrappers grandes */
+          .report-doc [class*="card"]:not(.report-hero) {
+            page-break-inside: auto !important;
+            break-inside: auto !important;
           }
 
           /* 7. SVGs escalam pro container A4 */
