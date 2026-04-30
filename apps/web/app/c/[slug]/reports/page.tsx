@@ -510,12 +510,14 @@ export default function ReportsPage() {
       <style jsx global>{`
         @media print {
           /* ═══════════════════════════════════════════════════════════════
-             RELATORIO PDF PROFISSIONAL
-             Estrategia: flip CSS variables dark→light + hide chrome.
-             Padrao MDN/W3C — mais robusto que sobrescrever cada bg inline.
+             RELATORIO PDF — DARK MODE END-TO-END
+             Estrategia: nao flippar tema. O design black do screen e a
+             estetica desejada — replica no PDF preservando cores inline e
+             tokens dark. So escondemos chrome e ajustamos pra A4.
              ═══════════════════════════════════════════════════════════════ */
 
-          /* 1. Preservar cores (gradients, brand) e box-sizing universal */
+          /* 1. Preservar bg/cor de fundo no print (browsers default skip
+                pra economizar tinta — print-color-adjust:exact desliga isso) */
           *, *::before, *::after {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
@@ -523,41 +525,14 @@ export default function ReportsPage() {
             box-sizing: border-box !important;
           }
 
-          /* 2. FLIP CSS vars dark→light. Cobre TODOS os componentes que usam
-                var(--surface), var(--ink), etc. sem precisar override-inline. */
-          :root,
-          [data-theme="dark"],
-          [data-theme="light"] {
-            --bg:        #ffffff !important;
-            --surface:   #fafaf6 !important;
-            --surface-2: #f3f3eb !important;
-            --surface-3: #e9e9df !important;
-            --surface-hi: #ffffff !important;
-            --ink:       #1a1a1a !important;
-            --ink-2:     #3a3835 !important;
-            --ink-3:     #6b6b66 !important;
-            --ink-4:     #a0a09b !important;
-            --border:    #e5e5e0 !important;
-            --border-2:  #d5d5cf !important;
-            --border-hi: #f5f5f0 !important;
-            --hover:     rgba(0,0,0,0.04) !important;
-            --active:    rgba(0,0,0,0.08) !important;
-            --pos:       #2d8f4d !important;
-            --neg:       #c0413a !important;
-            --warn:      #c8881e !important;
-            --info:      #3070a8 !important;
-            --hero:      #c25a1f !important;
-            --card-shadow: 0 1px 0 rgba(0,0,0,0.02), 0 1px 3px rgba(0,0,0,0.04) !important;
-          }
-
-          /* 3. Esconder chrome */
+          /* 2. Esconder chrome: sidebar, topbar, header da pagina, action buttons */
           .sidebar, .topbar, .page-head, .no-print,
           .sb-badge, nav, aside.sidebar { display: none !important; }
 
-          /* 4. RESET layout — sem height heredada de 100vh, sem grid 240px */
+          /* 3. RESET layout — sem height 100vh nem grid 240px da sidebar */
           html, body {
-            background: #ffffff !important;
-            color: #1a1a1a !important;
+            background: #0A0A09 !important;
+            color: #F5F2EB !important;
             margin: 0 !important;
             padding: 0 !important;
             height: auto !important;
@@ -565,14 +540,14 @@ export default function ReportsPage() {
             overflow: visible !important;
           }
           .app, .app[data-sidebar] {
-            background: #ffffff !important;
+            background: #0A0A09 !important;
             display: block !important;
             grid-template-columns: 1fr !important;
             height: auto !important;
             overflow: visible !important;
           }
           .main, .page {
-            background: #ffffff !important;
+            background: #0A0A09 !important;
             padding: 0 !important;
             margin: 0 !important;
             max-width: 100% !important;
@@ -580,11 +555,8 @@ export default function ReportsPage() {
             overflow: visible !important;
           }
 
-          /* 5. report-doc — strict A4 width + clip overflow */
+          /* 4. report-doc — fit A4 sem reset de bg/border (preserva o design dark) */
           .report-doc {
-            background: #ffffff !important;
-            color: #1a1a1a !important;
-            border: none !important;
             border-radius: 0 !important;
             padding: 0 !important;
             margin: 0 !important;
@@ -593,57 +565,29 @@ export default function ReportsPage() {
             overflow: hidden !important;
             display: block !important;
           }
+          /* O wrapper interno do corpo (logo apos o hero) tem bg --surface
+             que no dark mode ja e #1a1a1a/proximo. So ajusta padding e remove
+             radius que nao faz sentido em paper. */
           .report-doc > div:last-child {
-            background: #ffffff !important;
-            border: none !important;
             border-radius: 0 !important;
-            padding: 28px 24px !important;
-            gap: 22px !important;
+            padding: 32px 36px !important;
+            gap: 28px !important;
           }
 
-          /* 6. HERO mantem DARK como capa — preserva hierarquia editorial.
-                Importante: NAO forcar 'color: inherit' em descendentes — o
-                design usa cores explicitas (cream / accent / soft tints)
-                pra criar hierarquia de leitura. */
+          /* 5. HERO — preserva tudo do screen, so reseta border-radius e
+                garante page-break-after avoid. NAO mexer em padding/cores —
+                inline styles sao a verdade. */
           .report-hero {
             border-radius: 0 !important;
-            padding: 56px 44px 44px !important;
             page-break-after: avoid !important;
-            background: #0a0a0a !important;
-            color: #f5f5f5 !important;
-            border-bottom: 1px solid #c25a1f !important;  /* hairline accent na base */
-          }
-          .report-hero h1 {
-            font-size: 44px !important;
-            letter-spacing: -0.025em !important;
-            line-height: 1.0 !important;
-            color: #F5F2EB !important;
-            margin: 0 0 12px !important;
-          }
-          /* Pill "RELATÓRIO · PERFORMANCE" — bumpar contraste do border pro print */
-          .report-hero [style*="border: 1px solid rgba(245,242,235"] {
-            border-color: rgba(245,242,235,0.32) !important;
-            color: rgba(245,242,235,0.78) !important;
-          }
-          /* Frase-resumo: garantir que strongs preservem suas cores inline.
-             #F5F2EB (cream/branco) pros R$, #c25a1f (accent) so pra 1 numero-chave.
-             Color fallback explicito caso wildcard rules de outros lugares vazem. */
-          .report-hero strong[style*="#F5F2EB"],
-          .report-hero strong[style*="#f5f2eb"] {
-            color: #F5F2EB !important;
-          }
-          .report-hero strong[style*="var(--hero)"],
-          .report-hero strong[style*="--hero"] {
-            color: #c25a1f !important;
           }
 
-          /* 7. PAGE BREAKS — chart e funnel sempre em pagina nova */
+          /* 6. PAGE BREAKS — chart e funnel sempre em pagina nova */
           section.report-page-break-before {
             page-break-before: always !important;
             break-before: page !important;
           }
-          .report-hero { page-break-after: avoid !important; }
-          /* Pequenos blocos nao cortam */
+          /* Pequenos blocos nao cortam ao meio */
           [class*="card"],
           section > div[style*="grid"],
           .grid {
@@ -657,47 +601,43 @@ export default function ReportsPage() {
             margin-top: 0 !important;
           }
 
-          /* 8. SVGs escalam pro container (largura A4) */
+          /* 7. SVGs escalam pro container A4 */
           .report-doc svg {
             width: 100% !important;
             max-width: 100% !important;
             height: auto !important;
           }
-          /* BigChart wrap min-height pra ResizeObserver nao colapsar */
           .report-doc > div:last-child [style*="position: relative"][style*="height"] {
             min-height: 220px !important;
           }
 
-          /* 9. APENDICE grid — fit A4 width strict, sem overflow direita */
-          .report-doc [style*="grid-template-columns: repeat(3"] {
-            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          /* 8. APENDICE/KPI grids — fit A4 strict, sem overflow direita */
+          .report-doc [style*="grid-template-columns: repeat(3"],
+          .report-doc [style*="grid-template-columns: repeat(4"] {
             width: 100% !important;
             max-width: 100% !important;
           }
-          /* Children dos grids: min-width:0 pra deixar flex-basis funcionar */
           .report-doc [style*="grid"] > * {
             min-width: 0 !important;
             max-width: 100% !important;
           }
-          /* Hint text dos Tiny cards quebra linha em vez de overflow */
           .report-doc [style*="grid"] > * div {
             word-wrap: break-word !important;
             overflow-wrap: break-word !important;
           }
 
-          /* 10. FUNNEL bars row — labels 160px (era 180), gap 10px (era 12) */
+          /* 9. FUNNEL labels — encolher pra caber em A4 */
           .report-doc [style*="grid-template-columns: 180px"] {
-            grid-template-columns: 160px 1fr 100px !important;
-            gap: 10px !important;
+            grid-template-columns: 160px 1fr 110px !important;
+            gap: 12px !important;
           }
 
-          /* 11. @page A4 */
+          /* 10. @page A4 — margem zero (a capa preta vai borderless ate a borda
+                 do papel; o body tem padding interno do report-doc).
+                 Background dark precisa que o browser nao injete bg branco padrao. */
           @page {
             size: A4;
-            margin: 12mm 10mm;
-          }
-          @page :first {
-            margin: 0;  /* hero borderless na pagina 1 */
+            margin: 0;
           }
         }
       `}</style>
