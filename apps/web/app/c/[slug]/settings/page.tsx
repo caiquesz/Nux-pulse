@@ -1,14 +1,18 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   createGoogleConnection,
   createMetaConnection,
+  getClient,
   listConnections,
   listJobs,
+  listNiches,
   triggerMetaBackfill,
+  updateClient,
+  type ClientUpdatePayload,
   type GoogleConnectionPayload,
   type MetaConnectionPayload,
 } from "@/lib/api";
@@ -26,6 +30,62 @@ export default function SettingsPage() {
 
   const metaConn = conns.data?.find((c) => c.platform === "meta");
   const googleConn = conns.data?.find((c) => c.platform === "google");
+
+  // ─── Dados do cliente (editáveis) ────────────────────────────────────
+  const clientQ = useQuery({
+    queryKey: ["client", slug],
+    queryFn: () => getClient(slug),
+    enabled: !!slug,
+  });
+  const nichesQ = useQuery({ queryKey: ["niches"], queryFn: () => listNiches() });
+
+  const [pName, setPName] = useState("");
+  const [pNiche, setPNiche] = useState<string>("");
+  const [pSegment, setPSegment] = useState("");
+  const [pBudget, setPBudget] = useState<string>("");
+  const [pRevenueGoal, setPRevenueGoal] = useState<string>("");
+  const [pAccent, setPAccent] = useState<string>("#FF6B35");
+  const [profileSaved, setProfileSaved] = useState(false);
+
+  // Hidrata o form quando o cliente carrega (ou quando mudar de slug).
+  useEffect(() => {
+    const c = clientQ.data;
+    if (!c) return;
+    setPName(c.name ?? "");
+    setPNiche(c.niche_code ?? "");
+    setPSegment(c.segment ?? "");
+    setPBudget(c.monthly_budget ?? "");
+    setPRevenueGoal(c.monthly_revenue_goal ?? "");
+    setPAccent(c.accent_color ?? "#FF6B35");
+  }, [clientQ.data]);
+
+  const saveProfile = useMutation({
+    mutationFn: (body: ClientUpdatePayload) => updateClient(slug, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["client", slug] });
+      qc.invalidateQueries({ queryKey: ["clients"] });
+      qc.invalidateQueries({ queryKey: ["portfolio"] });
+      setProfileSaved(true);
+      setTimeout(() => setProfileSaved(false), 3000);
+    },
+  });
+
+  function submitProfile(e: React.FormEvent) {
+    e.preventDefault();
+    const toNum = (s: string) => {
+      const cleaned = s.trim().replace(/\./g, "").replace(",", ".");
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? n : null;
+    };
+    saveProfile.mutate({
+      name: pName.trim() || undefined,
+      niche_code: pNiche || null,
+      segment: pSegment.trim() || null,
+      monthly_budget: pBudget.trim() ? toNum(pBudget) : null,
+      monthly_revenue_goal: pRevenueGoal.trim() ? toNum(pRevenueGoal) : null,
+      accent_color: pAccent || null,
+    });
+  }
 
   const [adAccount, setAdAccount] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -127,6 +187,129 @@ export default function SettingsPage() {
       </div>
 
       <section style={{ maxWidth: 640, marginTop: 24 }}>
+        {/* ─── Dados do cliente (perfil editável) ─── */}
+        <div className="card" style={{ padding: 24, marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 600 }}>Dados do cliente</h2>
+            <span className="tag" style={{ background: "var(--surface-2)", color: "var(--ink-3)" }}>
+              perfil
+            </span>
+          </div>
+          <p style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 16 }}>
+            Investimento mensal, meta de receita, nicho e segmento — usados pelo Command Center, scoring
+            e relatórios.
+          </p>
+
+          <form onSubmit={submitProfile} style={{ display: "grid", gap: 14 }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Nome</span>
+              <input
+                value={pName}
+                onChange={(e) => setPName(e.target.value)}
+                placeholder="Nome do cliente"
+                style={inputStyle}
+              />
+            </label>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Nicho</span>
+                <select
+                  value={pNiche}
+                  onChange={(e) => setPNiche(e.target.value)}
+                  style={inputStyle}
+                >
+                  <option value="">— sem nicho —</option>
+                  {(nichesQ.data ?? []).map((n) => (
+                    <option key={n.code} value={n.code}>
+                      {n.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Segmento (opcional)</span>
+                <input
+                  value={pSegment}
+                  onChange={(e) => setPSegment(e.target.value)}
+                  placeholder="ex: ecommerce, b2b, varejo"
+                  style={inputStyle}
+                />
+              </label>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                  Investimento mensal (R$)
+                </span>
+                <input
+                  inputMode="decimal"
+                  value={pBudget}
+                  onChange={(e) => setPBudget(e.target.value)}
+                  placeholder="10000"
+                  style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+                />
+              </label>
+
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                  Meta de receita mensal (R$)
+                </span>
+                <input
+                  inputMode="decimal"
+                  value={pRevenueGoal}
+                  onChange={(e) => setPRevenueGoal(e.target.value)}
+                  placeholder="50000"
+                  style={{ ...inputStyle, fontFamily: "var(--font-mono)" }}
+                />
+              </label>
+            </div>
+
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Cor do tema do cliente</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input
+                  type="color"
+                  value={pAccent}
+                  onChange={(e) => setPAccent(e.target.value)}
+                  style={{
+                    width: 44,
+                    height: 36,
+                    padding: 0,
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    background: "transparent",
+                    cursor: "pointer",
+                  }}
+                />
+                <input
+                  value={pAccent}
+                  onChange={(e) => setPAccent(e.target.value)}
+                  placeholder="#FF6B35"
+                  style={{ ...inputStyle, fontFamily: "var(--font-mono)", flex: 1 }}
+                />
+              </div>
+            </label>
+
+            {saveProfile.isError && (
+              <div style={{ color: "var(--neg)", fontSize: 12 }}>
+                {(saveProfile.error as Error).message}
+              </div>
+            )}
+            {profileSaved && (
+              <div style={{ color: "var(--pos)", fontSize: 12 }}>✓ Dados atualizados.</div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+              <button type="submit" className="btn" disabled={saveProfile.isPending}>
+                {saveProfile.isPending ? "Salvando…" : "Salvar dados"}
+              </button>
+            </div>
+          </form>
+        </div>
+
         <div className="card" style={{ padding: 24 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
             <h2 style={{ fontSize: 15, fontWeight: 600 }}>Meta Ads</h2>

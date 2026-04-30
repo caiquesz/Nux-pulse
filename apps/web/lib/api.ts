@@ -13,7 +13,13 @@ export type ClientRead = {
   accent_color: string | null;
   monthly_budget: string | null;
   monthly_revenue_goal: string | null;
+  niche_code: string | null;
+  segment: string | null;
   is_active: boolean;
+  onboarded_at?: string | null;
+  tier_current?: string | null;
+  score_current?: number | null;
+  score_updated_at?: string | null;
 };
 
 type MetaOverviewMetrics = {
@@ -127,6 +133,19 @@ export type ClientCreatePayload = {
 };
 export const createClient = (body: ClientCreatePayload) =>
   post<ClientRead>("/api/clients", body);
+
+export type ClientUpdatePayload = {
+  name?: string | null;
+  logo_url?: string | null;
+  accent_color?: string | null;
+  monthly_budget?: number | null;
+  monthly_revenue_goal?: number | null;
+  is_active?: boolean | null;
+  niche_code?: string | null;
+  segment?: string | null;
+};
+export const updateClient = (slug: string, body: ClientUpdatePayload) =>
+  patch<ClientRead>(`/api/clients/${slug}`, body);
 
 // ─── connections ─────────────────────────────────────────────────────────
 export type ConnectionRead = {
