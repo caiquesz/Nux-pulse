@@ -33,7 +33,7 @@ export function NicheRanking({ data }: { data: PortfolioByNiche }) {
         background: "var(--surface-2)",
       }}>
         <Total label="Nichos ativos" value={String(totals.n_niches)} />
-        <Total label="Spend total" value={fmtBRL(totals.spend)} />
+        <Total label="Investimento total" value={fmtBRL(totals.spend)} />
         <Total label="Receita total" value={fmtBRL(totals.revenue)} tone="pos" />
         <Total
           label="ROAS portfolio"
@@ -62,7 +62,7 @@ export function NicheRanking({ data }: { data: PortfolioByNiche }) {
       }} className="mono">
         <span>Nicho</span>
         <span>Clientes</span>
-        <span>Spend (com %)</span>
+        <span>Investimento (com %)</span>
         <span style={{ textAlign: "right" }}>Score</span>
         <span style={{ textAlign: "right" }}>Receita</span>
         <span style={{ textAlign: "right" }}>ROAS</span>

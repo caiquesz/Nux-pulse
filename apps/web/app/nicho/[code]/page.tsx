@@ -157,7 +157,7 @@ function ComparisonTable({ data }: { data: NicheComparison }) {
             <th style={thStyle}>CTR</th>
             <th style={thStyle}>CPC</th>
             <th style={thStyle}>ROAS</th>
-            <th style={{ ...thStyle, textAlign: "right" }}>Spend MTD</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Investimento MTD</th>
             <th style={{ ...thStyle, textAlign: "right" }}>Receita MTD</th>
           </tr>
         </thead>

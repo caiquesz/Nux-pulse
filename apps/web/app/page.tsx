@@ -285,7 +285,7 @@ function CommandCenter() {
             gap: 12, marginBottom: 12,
           }}>
             <KpiTile
-              label="Spend"
+              label="Investimento"
               value={fmtBRL(data.kpis.portfolio_spend)}
               series={portfolioSpendSeries}
               labels={sparklineLabels}

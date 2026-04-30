@@ -99,7 +99,7 @@ export function ClientRow({ row }: { row: ClientPortfolioRow }) {
           fontSize: 9, color: "var(--ink-4)",
           letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 3,
         }}>
-          Spend diário
+          Investimento diário
         </div>
         {series.length > 1 ? (
           <Sparkline
@@ -115,7 +115,7 @@ export function ClientRow({ row }: { row: ClientPortfolioRow }) {
       </div>
 
       {/* col 4: spend total no periodo */}
-      <Stat label="Spend" value={fmtCompact(row.spend)} />
+      <Stat label="Investimento" value={fmtCompact(row.spend)} />
 
       {/* col 5: receita ou roas (mostra o que tem dado) */}
       {row.roas !== null ? (
