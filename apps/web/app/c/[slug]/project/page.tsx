@@ -35,28 +35,49 @@ export default function ProjectPage() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <div className="meta">11 — PLANEJAMENTO</div>
-          <h1>Planejamento do cliente</h1>
-          <div className="sub">Tarefas, calendário e arquivos em uma só tela</div>
-        </div>
-      </div>
+      {/* Header enxuto: apenas o nome do documento + tabs Linear-style.
+          Breadcrumb global (CLIENTE / PLANEJAMENTO) ja contextualiza acima. */}
+      <div style={{
+        display: "flex", alignItems: "flex-end", justifyContent: "space-between",
+        gap: 16, marginBottom: 18, borderBottom: "1px solid var(--border)",
+      }}>
+        <h1 style={{
+          fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em",
+          margin: 0, paddingBottom: 12,
+        }}>
+          Planejamento
+        </h1>
 
-      {/* Segmented control — troca de tab */}
-      <div role="tablist" className="seg" style={{ marginBottom: 24, width: "fit-content" }}>
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            role="tab"
-            aria-selected={current === t.key}
-            className={current === t.key ? "on" : ""}
-            onClick={() => setTab(t.key)}
-            title={t.desc}
-          >
-            {t.label}
-          </button>
-        ))}
+        {/* Tabs alinhadas com a baseline do título (Linear-style) */}
+        <div role="tablist" style={{ display: "flex", gap: 0 }}>
+          {TABS.map((t) => {
+            const active = current === t.key;
+            return (
+              <button
+                key={t.key}
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTab(t.key)}
+                title={t.desc}
+                style={{
+                  position: "relative",
+                  background: "transparent", border: "none",
+                  padding: "10px 14px", marginBottom: -1,
+                  fontSize: 13, fontWeight: active ? 600 : 500,
+                  color: active ? "var(--ink)" : "var(--ink-3)",
+                  fontFamily: "var(--font-sans)",
+                  cursor: "pointer",
+                  borderBottom: `2px solid ${active ? "var(--ink)" : "transparent"}`,
+                  transition: "color .08s, border-color .08s",
+                }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = "var(--ink-2)"; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = "var(--ink-3)"; }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {TabContent}
