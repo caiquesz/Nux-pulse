@@ -137,9 +137,9 @@ def diagnose_meta(slug: str, db: Session = Depends(get_db)):
     )
     if not conn or not conn.tokens_enc:
         raise HTTPException(400, "no meta connection")
-    token = decrypt(conn.tokens_enc)
     started = time.time()
     try:
+        token = decrypt(conn.tokens_enc)
         # retries=0 pra falhar rápido em vez de ficar em backoff
         client = MetaClient(token, timeout=15.0)
         client._get_retries = 0  # noqa: acesso interno intencional

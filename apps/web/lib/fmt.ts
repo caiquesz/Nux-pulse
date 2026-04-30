@@ -22,6 +22,16 @@ export function fmtPct(v: number, digits = 2): string {
   return v.toFixed(digits).replace(".", ",") + "%";
 }
 
+// Como fmtPct, mas escolhe a precisão pra não esconder valores pequenos
+// (ex.: 0,013% não vira "0,01%" e 0,001% não vira "0,00%").
+export function fmtPctAdaptive(v: number): string {
+  const abs = Math.abs(v);
+  if (abs > 0 && abs < 0.01) return fmtPct(v, 4);
+  if (abs > 0 && abs < 0.1)  return fmtPct(v, 3);
+  if (abs >= 100)            return fmtPct(v, 0);
+  return fmtPct(v, 2);
+}
+
 export function fmtRatio(v: number, digits = 2): string {
   return v.toFixed(digits).replace(".", ",") + "x";
 }

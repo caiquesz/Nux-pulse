@@ -569,12 +569,20 @@ def meta_funnel(
         for k, v in (r.actions or {}).items():
             totals[k] = totals.get(k, 0) + float(v or 0)
 
+    # Canonical de "compras" = manual_conversions (Trackcore + UI manual).
+    # Decisão Caique 2026-04-29: Pulse trata Trackcore como fonte da verdade
+    # pra evitar 3 números diferentes em 3 telas (Visão geral / Funil / Reports).
+    manual_totals = aggregate_manuals(db, c.id, since_d, until_d)
+    manual_purchases = int(manual_totals.get("purchases", 0) or 0)
+
     # monta as etapas na ordem do funil — usa fallback ranking pra resolver
     # chaves canônicas por etapa.
     out = []
     prev_val = None
     for stage in FUNNEL_STAGES:
-        if stage.get("direct"):
+        if stage["key"] == "purchase":
+            v = manual_purchases
+        elif stage.get("direct"):
             v = int(totals.get(stage["key"], 0) or 0)
         else:
             v = int(_first_total(totals, stage["candidates"]) or 0)

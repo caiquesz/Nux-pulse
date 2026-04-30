@@ -4,7 +4,7 @@ import { useParams } from "next/navigation";
 import { useState } from "react";
 
 import { metaFunnel } from "@/lib/api";
-import { fmtInt, fmtPct } from "@/lib/fmt";
+import { fmtInt, fmtPct, fmtPctAdaptive } from "@/lib/fmt";
 
 export default function FunnelPage() {
   const params = useParams<{ slug: string }>();
@@ -76,7 +76,7 @@ export default function FunnelPage() {
                 <Stat label={`Fundo (${finalStage.label.toLowerCase()})`} value={fmtInt(finalStage.value)} />
                 <Stat
                   label="Conversão end-to-end"
-                  value={fmtPct(endToEndPct)}
+                  value={fmtPctAdaptive(endToEndPct)}
                   tone={endToEndPct >= 1 ? "pos" : "warn"}
                 />
               </>
@@ -126,7 +126,7 @@ export default function FunnelPage() {
                           textAlign: "right",
                         }}
                       >
-                        {hasData && conv != null ? `${fmtPct(conv)} da anterior` : "—"}
+                        {hasData && conv != null ? `${fmtPctAdaptive(conv)} da anterior` : "—"}
                       </span>
                       <span
                         style={{

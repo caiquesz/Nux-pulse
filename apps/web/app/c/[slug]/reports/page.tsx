@@ -31,8 +31,11 @@ export default function ReportsPage() {
   // ── Derivações narrativas ─────────────────────────────────────────────
   const primaryConversion = useMemo(() => {
     if (!ov) return null;
-    // Escolhe a conversão principal com base no volume — define o foco da copy
-    if (ov.purchases > 0) return { key: "purchases", label: "compra", plural: "compras", value: ov.purchases, cost: ov.cost_per_purchase };
+    // Compras canônicas = manual_conversions (Trackcore + UI manual). Evita
+    // conflito entre Visão geral / Funil / Reports.
+    const canonicalPurchases = ov.manual_purchases ?? 0;
+    const canonicalCpp = canonicalPurchases > 0 ? ov.spend / canonicalPurchases : 0;
+    if (canonicalPurchases > 0) return { key: "purchases", label: "compra", plural: "compras", value: canonicalPurchases, cost: canonicalCpp };
     if (ov.leads > 0)     return { key: "leads",     label: "lead",   plural: "leads",   value: ov.leads,     cost: ov.cost_per_lead };
     if (ov.messages > 0)  return { key: "messages",  label: "conversa", plural: "conversas no WhatsApp", value: ov.messages, cost: ov.cost_per_message };
     return null;
