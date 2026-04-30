@@ -1340,52 +1340,55 @@ button.card:hover .row-chevron {
   font-weight: 500;
 }
 
-/* ── react-day-picker override ── */
+/* ── react-day-picker v9 override — Linear-style range picker ──────
+   Estrategia: usar !important nos seletores chave porque a v9 da lib
+   tem CSS interno que ignora algumas das nossas vars. Cores diretas
+   (--hero) garantem que a cor da brand prevaleca sobre o blue default
+   da lib. */
 .rdp-root {
   --rdp-accent-color: var(--hero);
-  --rdp-accent-background-color: var(--hero-bg);
-  --rdp-day-width: 36px;
-  --rdp-day-height: 36px;
-  --rdp-day_button-width: 36px;
-  --rdp-day_button-height: 36px;
-  --rdp-range_start-color: var(--accent-ink);
-  --rdp-range_start-background: var(--hero);
-  --rdp-range_end-color: var(--accent-ink);
-  --rdp-range_end-background: var(--hero);
-  --rdp-range_middle-color: var(--hero);
-  --rdp-range_middle-background-color: var(--hero-bg);
-  --rdp-today-color: var(--hero);
+  --rdp-day-width: 34px;
+  --rdp-day-height: 32px;
+  --rdp-day_button-width: 32px;
+  --rdp-day_button-height: 32px;
   --rdp-selected-border: none;
   font-family: var(--font-sans);
   font-size: 12px;
   margin: 0;
 }
-.rdp-months { gap: 20px; }
+.rdp-months { gap: 24px; }
 .rdp-month_caption {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.2px;
   color: var(--ink);
-  padding: 4px 0 10px;
+  padding: 2px 0 12px;
   text-transform: capitalize;
 }
-.rdp-weekdays { margin-bottom: 2px; }
+.rdp-weekdays { margin-bottom: 4px; }
 .rdp-weekday {
   font-family: var(--font-sans);
   font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 1.5px;
+  font-weight: 600;
+  letter-spacing: 1.4px;
   text-transform: uppercase;
   color: var(--ink-4);
-  padding: 6px 0;
+  padding: 4px 0;
   text-align: center;
   width: var(--rdp-day-width);
 }
+/* Cell: 0 padding pra que o button preencha toda a celula. Isso e o
+   que faz o range conectar visualmente sem gap entre dias adjacentes. */
 .rdp-day {
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
+  padding: 0 !important;
+  width: var(--rdp-day-width);
+  height: var(--rdp-day-height);
 }
 .rdp-day_button {
+  width: var(--rdp-day-width);
+  height: var(--rdp-day-height);
   border-radius: 6px;
   border: none;
   background: transparent;
@@ -1393,30 +1396,67 @@ button.card:hover .row-chevron {
   font-size: 12px;
   font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
+  font-weight: 500;
   cursor: pointer;
-  transition: background 120ms, color 120ms;
+  transition: background 120ms, color 120ms, box-shadow 120ms;
+  margin: 0;
 }
-.rdp-day_button:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
-.rdp-today .rdp-day_button { font-weight: 600; color: var(--hero); }
-.rdp-selected .rdp-day_button {
-  background: var(--hero);
-  color: var(--accent-ink);
+.rdp-day_button:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+/* Hoje: ring outline laranja + texto bold (mais visivel que so cor) */
+.rdp-today:not(.rdp-selected):not(.rdp-range_start):not(.rdp-range_end):not(.rdp-range_middle) .rdp-day_button {
+  font-weight: 700;
+  color: var(--hero);
+  box-shadow: inset 0 0 0 1.5px var(--hero);
+}
+
+/* Selecao single (sem range) — pill solido em --hero */
+.rdp-selected:not(.rdp-range_middle):not(.rdp-range_end) .rdp-day_button,
+.rdp-day_button.rdp-selected {
+  background: var(--hero) !important;
+  color: var(--accent-ink) !important;
+  font-weight: 600;
+  border-radius: 6px;
+}
+
+/* Range middle — bg sutil em tint do --hero (~18% opacity sobre surface).
+   border-radius 0 conecta visualmente com endpoints na MESMA linha. */
+.rdp-range_middle .rdp-day_button {
+  background: color-mix(in oklch, var(--hero) 18%, var(--surface)) !important;
+  color: var(--ink) !important;
+  border-radius: 0 !important;
   font-weight: 500;
 }
-.rdp-range_middle .rdp-day_button {
-  background: var(--hero-bg);
-  color: var(--hero);
-  border-radius: 0;
+.rdp-range_middle .rdp-day_button:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--hero) 26%, var(--surface)) !important;
 }
-.rdp-range_start .rdp-day_button { border-radius: 6px 0 0 6px; }
-.rdp-range_end .rdp-day_button   { border-radius: 0 6px 6px 0; }
-.rdp-range_start.rdp-range_end .rdp-day_button { border-radius: 6px; }
+
+/* Endpoints: solid laranja, com canto arredondado VOLTADO PRA FORA do range */
+.rdp-range_start .rdp-day_button,
+.rdp-range_end .rdp-day_button {
+  background: var(--hero) !important;
+  color: var(--accent-ink) !important;
+  font-weight: 700;
+}
+.rdp-range_start .rdp-day_button { border-radius: 6px 0 0 6px !important; }
+.rdp-range_end .rdp-day_button   { border-radius: 0 6px 6px 0 !important; }
+/* Edge case: range com 1 dia so (start === end) — pill completo */
+.rdp-range_start.rdp-range_end .rdp-day_button { border-radius: 6px !important; }
+
+/* Quando o middle bate em final/inicio de semana, mostra o bg ate a borda
+   da semana (o button preenche 100% da cell ja) */
+
 .rdp-disabled, .rdp-disabled .rdp-day_button {
   color: var(--ink-4);
   cursor: not-allowed;
-  opacity: 0.4;
+  opacity: 0.35;
 }
-.rdp-outside { color: var(--ink-4); opacity: 0.45; }
+.rdp-outside { color: var(--ink-4); opacity: 0.4; }
+
+/* Navegacao prev/next — botoes pill clean */
 .rdp-nav button {
   width: 28px;
   height: 28px;
@@ -1427,7 +1467,11 @@ button.card:hover .row-chevron {
   cursor: pointer;
   transition: background 120ms, color 120ms, border-color 120ms;
 }
-.rdp-nav button:hover { background: var(--hover); color: var(--ink); border-color: var(--border-2); }
+.rdp-nav button:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--border-2);
+}
 .rdp-chevron { fill: currentColor; }
 
 /* Pill do trigger quando tem range ativo: destacada */

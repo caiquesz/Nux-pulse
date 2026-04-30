@@ -4,6 +4,7 @@ import { DayPicker, type DateRange } from "react-day-picker";
 import { ptBR } from "date-fns/locale";
 import {
   format, subDays, subMonths, startOfMonth, endOfMonth, startOfYear,
+  differenceInCalendarDays,
 } from "date-fns";
 import "react-day-picker/dist/style.css";
 
@@ -33,10 +34,20 @@ const PRESETS: Preset[] = [
   { label: "Este ano",        build: () => ({ from: startOfYear(today()), to: today() }) },
 ];
 
+const sameDay = (a?: Date, b?: Date) =>
+  !!a && !!b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+const rangesEqual = (a?: DateRange, b?: DateRange) =>
+  sameDay(a?.from, b?.from) && sameDay(a?.to, b?.to);
+
 export function DateRangePicker({ value, onChange, placeholder = "Personalizado" }: Props) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateRange | undefined>(value);
   const ref = useRef<HTMLDivElement>(null);
+  // Marca se o usuario interagiu manualmente. Usado pra decidir se faz
+  // auto-apply quando o range fica completo (evita auto-apply do useEffect
+  // que sincroniza draft com value).
+  const interactedRef = useRef(false);
 
   useEffect(() => setDraft(value), [value]);
 
@@ -44,24 +55,59 @@ export function DateRangePicker({ value, onChange, placeholder = "Personalizado"
     const onDown = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
   }, []);
+
+  // Auto-apply: quando draft tem from + to (range completo) e diferentes do
+  // value atual, aplica e fecha automaticamente. Pequeno delay pra dar tempo
+  // do usuario ajustar caso clique errado.
+  useEffect(() => {
+    if (!open || !interactedRef.current) return;
+    if (!draft?.from || !draft?.to) return;
+    if (rangesEqual(draft, value)) return;
+    const id = setTimeout(() => {
+      onChange(draft);
+      setOpen(false);
+      interactedRef.current = false;
+    }, 180);
+    return () => clearTimeout(id);
+  }, [draft, value, open, onChange]);
+
+  const handleSelect = (r: DateRange | undefined) => {
+    interactedRef.current = true;
+    setDraft(r);
+  };
 
   const fmt = (d: Date) => format(d, "d MMM", { locale: ptBR });
   const label =
     value?.from && value?.to
-      ? value.from.getTime() === value.to.getTime()
+      ? sameDay(value.from, value.to)
         ? fmt(value.from)
         : `${fmt(value.from)} — ${fmt(value.to)}`
       : placeholder;
 
   const apply = (r?: DateRange) => {
+    interactedRef.current = false;
     onChange(r);
     setOpen(false);
   };
 
-  const canApply = !!(draft?.from && draft?.to);
+  // Estado da seleção: "vazia" / "início definido, aguardando fim" / "completa"
+  const state: "empty" | "partial" | "complete" =
+    !draft?.from ? "empty" : !draft?.to ? "partial" : "complete";
+
+  const dayCount =
+    draft?.from && draft?.to
+      ? differenceInCalendarDays(draft.to, draft.from) + 1
+      : 0;
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
@@ -91,7 +137,7 @@ export function DateRangePicker({ value, onChange, placeholder = "Personalizado"
             <DayPicker
               mode="range"
               selected={draft}
-              onSelect={setDraft}
+              onSelect={handleSelect}
               numberOfMonths={2}
               locale={ptBR}
               showOutsideDays={false}
@@ -100,10 +146,29 @@ export function DateRangePicker({ value, onChange, placeholder = "Personalizado"
             />
             <div className="drp-footer">
               <div className="drp-summary">
-                {draft?.from && (
-                  <span className="mono">
-                    {fmt(draft.from)}
-                    {draft.to && draft.from.getTime() !== draft.to.getTime() && ` — ${fmt(draft.to)}`}
+                {state === "empty" && (
+                  <span style={{ color: "var(--ink-4)", fontSize: 11 }}>
+                    Clique para selecionar a data inicial
+                  </span>
+                )}
+                {state === "partial" && draft?.from && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <span className="mono">{fmt(draft.from)}</span>
+                    <span style={{ color: "var(--ink-4)", fontSize: 11 }}>
+                      → selecione a data final
+                    </span>
+                  </span>
+                )}
+                {state === "complete" && draft?.from && draft?.to && (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <span className="mono">
+                      {sameDay(draft.from, draft.to)
+                        ? fmt(draft.from)
+                        : `${fmt(draft.from)} — ${fmt(draft.to)}`}
+                    </span>
+                    <span className="mono" style={{ color: "var(--ink-4)", fontSize: 10 }}>
+                      {dayCount} {dayCount === 1 ? "dia" : "dias"}
+                    </span>
                   </span>
                 )}
               </div>
@@ -111,6 +176,7 @@ export function DateRangePicker({ value, onChange, placeholder = "Personalizado"
                 <button
                   className="btn ghost"
                   onClick={() => {
+                    interactedRef.current = false;
                     setDraft(undefined);
                     apply(undefined);
                   }}
@@ -119,9 +185,9 @@ export function DateRangePicker({ value, onChange, placeholder = "Personalizado"
                 </button>
                 <button
                   className="btn"
-                  disabled={!canApply}
+                  disabled={state !== "complete"}
                   onClick={() => apply(draft)}
-                  style={!canApply ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+                  style={state !== "complete" ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
                 >
                   Aplicar
                 </button>
