@@ -1,6 +1,15 @@
 "use client";
+import {
+  DndContext,
+  PointerSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   createTask, deleteTask, listTasks, listTeam, updateTask,
@@ -11,8 +20,8 @@ import { DateTimePicker } from "./DateTimePicker";
 import { PLATFORM, PRIORITY, STATUS, TASK_TYPE } from "./constants";
 
 // ═══════════════════════════════════════════════════════════════════════
-//  TASKS TAB — reescrito pra contexto de tráfego pago
-//  Camadas: Toolbar de filtros → Grupos temporais → Card de task
+//  TASKS TAB — Linear-style: kanban-only, toolbar compacta,
+//  filtros via popover, drag-and-drop entre colunas.
 // ═══════════════════════════════════════════════════════════════════════
 
 const STATUS_ORDER: TaskStatus[] = ["todo", "doing", "waiting", "done"];
@@ -28,56 +37,8 @@ const PERIOD_LABEL: Record<PeriodFilter, string> = {
 };
 
 // ──────────────────────────────────────────────────────────────────────
-//  Agrupamento temporal
-// ──────────────────────────────────────────────────────────────────────
-
-type Group = { key: string; label: string; tone: "neg" | "ink" | "dim"; items: Task[] };
-
-function groupByPeriod(tasks: Task[]): Group[] {
-  const now = new Date();
-  const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
-  const endToday = new Date(startToday); endToday.setDate(endToday.getDate() + 1);
-  const endWeek = new Date(startToday); endWeek.setDate(endWeek.getDate() + 7);
-  const endFortnight = new Date(startToday); endFortnight.setDate(endFortnight.getDate() + 15);
-
-  const overdue: Task[] = [];
-  const today: Task[] = [];
-  const tomorrow: Task[] = [];
-  const thisWeek: Task[] = [];
-  const later: Task[] = [];
-  const undated: Task[] = [];
-  const done: Task[] = [];
-
-  for (const t of tasks) {
-    if (t.status === "done") { done.push(t); continue; }
-    if (!t.due_at) { undated.push(t); continue; }
-    const d = new Date(t.due_at);
-    if (d < startToday) { overdue.push(t); continue; }
-    if (d < endToday) { today.push(t); continue; }
-    const startTomorrow = new Date(endToday);
-    const endTomorrow = new Date(startTomorrow); endTomorrow.setDate(endTomorrow.getDate() + 1);
-    if (d < endTomorrow) { tomorrow.push(t); continue; }
-    if (d < endWeek) { thisWeek.push(t); continue; }
-    if (d < endFortnight) { later.push(t); continue; }
-    later.push(t);
-  }
-
-  const groups: Group[] = [];
-  if (overdue.length) groups.push({ key: "overdue", label: "Atrasadas", tone: "neg", items: overdue });
-  if (today.length) groups.push({ key: "today", label: "Hoje", tone: "ink", items: today });
-  if (tomorrow.length) groups.push({ key: "tomorrow", label: "Amanhã", tone: "ink", items: tomorrow });
-  if (thisWeek.length) groups.push({ key: "week", label: "Esta semana", tone: "dim", items: thisWeek });
-  if (later.length) groups.push({ key: "later", label: "Próximas 2 semanas", tone: "dim", items: later });
-  if (undated.length) groups.push({ key: "undated", label: "Sem data definida", tone: "dim", items: undated });
-  if (done.length) groups.push({ key: "done", label: "Concluídas", tone: "dim", items: done });
-  return groups;
-}
-
-// ──────────────────────────────────────────────────────────────────────
 //  Component principal
 // ──────────────────────────────────────────────────────────────────────
-
-type ViewMode = "list" | "kanban";
 
 export function TasksTab({ slug }: { slug: string }) {
   const qc = useQueryClient();
@@ -86,18 +47,12 @@ export function TasksTab({ slug }: { slug: string }) {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
-  const [view, setView] = useState<ViewMode>(() => {
-    if (typeof window === "undefined") return "list";
-    return (localStorage.getItem("nux-tasks-view") as ViewMode) ?? "list";
-  });
-  useEffect(() => {
-    if (typeof window !== "undefined") localStorage.setItem("nux-tasks-view", view);
-  }, [view]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const tasksQ = useQuery({ queryKey: ["tasks", slug, filters], queryFn: () => listTasks(slug, filters), enabled: !!slug });
   const teamQ = useQuery({ queryKey: ["team"], queryFn: () => listTeam() });
 
-  // Filtros client-side (period + search) — complementa os server-side
+  // Filtros client-side (period + search) — complementam os server-side
   const filtered = useMemo(() => {
     const now = new Date(); const today0 = new Date(now); today0.setHours(0, 0, 0, 0);
     const endDay = new Date(today0); endDay.setDate(endDay.getDate() + 1);
@@ -119,8 +74,6 @@ export function TasksTab({ slug }: { slug: string }) {
     });
   }, [tasksQ.data, period, search]);
 
-  const groups = useMemo(() => groupByPeriod(filtered), [filtered]);
-
   const createMut = useMutation({
     mutationFn: (body: TaskCreate) => createTask(slug, body),
     onSuccess: () => {
@@ -129,8 +82,7 @@ export function TasksTab({ slug }: { slug: string }) {
       setShowForm(false);
     },
   });
-  // Optimistic update — a UI muda imediatamente ao arrastar, sem esperar
-  // o server. Em caso de erro, faz rollback. Resolve o "lag" percebido.
+  // Optimistic update — drag-and-drop move o card antes do server confirmar.
   const updateMut = useMutation({
     mutationFn: ({ id, patch }: { id: number; patch: Partial<TaskCreate> }) => updateTask(id, patch),
     onMutate: async ({ id, patch }) => {
@@ -168,60 +120,94 @@ export function TasksTab({ slug }: { slug: string }) {
     (period !== "all" ? 1 : 0) +
     (search ? 1 : 0);
 
+  const clearAll = () => { setFilters({}); setPeriod("all"); setSearch(""); };
+
+  // Drag & drop — handler único pro DndContext do board
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  const onDragEnd = (e: DragEndEvent) => {
+    const id = Number(e.active.id);
+    const target = e.over?.id as TaskStatus | undefined;
+    if (!id || !target) return;
+    const t = (tasksQ.data ?? []).find((x) => x.id === id);
+    if (!t || t.status === target) return;
+    updateMut.mutate({ id, patch: { status: target } });
+  };
+
   return (
     <div>
-      {/* ── Toolbar superior: search + novo ─────────────────────────── */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
-        <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
+      {/* ── Toolbar única ───────────────────────────────────────────── */}
+      <div style={{
+        display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap",
+      }}>
+        <div style={{ position: "relative", flex: "1 1 280px", maxWidth: 360 }}>
+          <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--ink-4)", fontSize: 12, pointerEvents: "none" }}>⌕</span>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar tarefa…"
             style={{
-              width: "100%", padding: "9px 12px 9px 32px",
+              width: "100%", padding: "7px 11px 7px 30px", height: 32,
               borderRadius: 8, border: "1px solid var(--border)",
-              background: "var(--surface-2)", color: "var(--ink)",
-              fontSize: 13, outline: "none",
+              background: "var(--surface)", color: "var(--ink)",
+              fontSize: 12.5, outline: "none",
             }}
           />
-          <span style={{ position: "absolute", left: 11, top: 10, color: "var(--ink-4)", fontSize: 13 }}>⌕</span>
         </div>
 
-        <button
-          className="btn ghost"
-          style={{ fontSize: 12 }}
-          onClick={() => { setFilters({}); setPeriod("all"); setSearch(""); }}
-          disabled={activeFilterCount === 0}
-          title="Limpar filtros"
-        >
-          Limpar
-          {activeFilterCount > 0 && (
-            <span className="mono" style={{ marginLeft: 6, fontSize: 10, color: "var(--ink-4)" }}>
-              ({activeFilterCount})
-            </span>
-          )}
-        </button>
+        <FiltersPopover
+          open={filtersOpen}
+          onOpenChange={setFiltersOpen}
+          filters={filters}
+          period={period}
+          onFiltersChange={setFilters}
+          onPeriodChange={setPeriod}
+          team={teamQ.data ?? []}
+          totals={tasksQ.data ?? []}
+          activeCount={activeFilterCount}
+        />
 
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          <ViewToggle value={view} onChange={setView} />
+        {activeFilterCount > 0 && (
+          <button
+            onClick={clearAll}
+            style={{
+              height: 32, padding: "0 12px", borderRadius: 8,
+              border: "1px solid var(--border)", background: "transparent",
+              color: "var(--ink-3)", fontSize: 12, cursor: "pointer",
+              fontFamily: "var(--font-sans)",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+          >
+            Limpar
+          </button>
+        )}
+
+        <div style={{ marginLeft: "auto" }}>
           <button className="btn" onClick={() => setShowForm((s) => !s)}>
             {showForm ? "Cancelar" : "+ Nova tarefa"}
           </button>
         </div>
       </div>
 
-      {/* ── Faixa de filtros chips ──────────────────────────────────── */}
-      <FilterChips
-        filters={filters}
-        onFiltersChange={setFilters}
-        period={period}
-        onPeriodChange={setPeriod}
-        team={teamQ.data ?? []}
-        totals={tasksQ.data ?? []}
-      />
+      {/* ── Faixa de filtros ativos (chips removíveis) ──────────────── */}
+      {activeFilterCount > 0 && (
+        <ActiveFiltersBar
+          filters={filters}
+          period={period}
+          search={search}
+          onClearStatus={() => setFilters({ ...filters, status: undefined })}
+          onClearPriority={() => setFilters({ ...filters, priority: undefined })}
+          onClearPlatform={() => setFilters({ ...filters, platform: undefined })}
+          onClearTaskType={() => setFilters({ ...filters, task_type: undefined })}
+          onClearAssignee={() => setFilters({ ...filters, assignee_id: undefined })}
+          onClearPeriod={() => setPeriod("all")}
+          onClearSearch={() => setSearch("")}
+          team={teamQ.data ?? []}
+        />
+      )}
 
       {showForm && !editing && (
-        <div style={{ margin: "16px 0 20px" }}>
+        <div style={{ margin: "8px 0 16px" }}>
           <NewTaskForm
             team={teamQ.data ?? []}
             onSubmit={(body) => createMut.mutate(body)}
@@ -244,17 +230,15 @@ export function TasksTab({ slug }: { slug: string }) {
       )}
 
       {/* ── Conteúdo ────────────────────────────────────────────────── */}
-      {tasksQ.isLoading && (
-        <SkeletonList />
-      )}
+      {tasksQ.isLoading && <SkeletonBoard />}
       {tasksQ.isError && (
-        <div className="card" style={{ padding: 14, marginTop: 16 }}>
+        <div className="card" style={{ padding: 14, marginTop: 12 }}>
           <strong>Erro ao carregar.</strong>
           <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{(tasksQ.error as Error)?.message}</div>
         </div>
       )}
-      {groups.length === 0 && !tasksQ.isLoading && (
-        <div className="card" style={{ padding: 32, textAlign: "center", marginTop: 16 }}>
+      {!tasksQ.isLoading && filtered.length === 0 && (
+        <div className="card" style={{ padding: 32, textAlign: "center", marginTop: 12 }}>
           <p style={{ color: "var(--ink-3)", fontSize: 13, marginBottom: 12 }}>
             {activeFilterCount > 0 ? "Nenhuma tarefa com esses filtros." : "Nenhuma tarefa ainda."}
           </p>
@@ -264,182 +248,373 @@ export function TasksTab({ slug }: { slug: string }) {
         </div>
       )}
 
-      {view === "list" && (
-        <div style={{ display: "grid", gap: 20, marginTop: 16 }}>
-          {groups.map((g) => (
-            <Section key={g.key} group={g}>
-              {g.items.map((t) => (
-                <TaskCard
-                  key={t.id}
-                  task={t}
-                  team={teamQ.data ?? []}
-                  onChangeStatus={(status) => updateMut.mutate({ id: t.id, patch: { status } })}
-                  onChangeAssignee={(assignee_id) => updateMut.mutate({ id: t.id, patch: { assignee_id } })}
-                  onToggleDone={() => {
-                    const next: TaskStatus = t.status === "done" ? "todo" : "done";
-                    updateMut.mutate({ id: t.id, patch: { status: next } });
-                  }}
-                  onEdit={() => { setShowForm(false); setEditing(t); }}
-                  onDelete={() => {
-                    if (confirm(`Excluir "${t.title}"?`)) deleteMut.mutate(t.id);
-                  }}
-                />
+      {!tasksQ.isLoading && filtered.length > 0 && (
+        <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+          <KanbanBoard
+            tasks={filtered}
+            onEdit={(t) => { setShowForm(false); setEditing(t); }}
+            onDelete={(id) => {
+              const t = (tasksQ.data ?? []).find((x) => x.id === id);
+              if (t && confirm(`Excluir "${t.title}"?`)) deleteMut.mutate(id);
+            }}
+          />
+        </DndContext>
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+//  FILTERS POPOVER — botão "Filtros" abre painel com Status/Período/Plataforma/Prioridade/Responsável
+// ──────────────────────────────────────────────────────────────────────
+
+function FiltersPopover({
+  open, onOpenChange, filters, period, onFiltersChange, onPeriodChange, team, totals, activeCount,
+}: {
+  open: boolean;
+  onOpenChange: (b: boolean) => void;
+  filters: TaskFilters;
+  period: PeriodFilter;
+  onFiltersChange: (f: TaskFilters) => void;
+  onPeriodChange: (p: PeriodFilter) => void;
+  team: { id: number; name: string; avatar_color: string | null }[];
+  totals: Task[];
+  activeCount: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onOpenChange(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open, onOpenChange]);
+
+  const countByStatus = (s: TaskStatus) => totals.filter((t) => t.status === s).length;
+  const countByPlatform = (p: TaskPlatform) => totals.filter((t) => t.platform === p).length;
+  const visiblePlatforms = (Object.keys(PLATFORM) as TaskPlatform[])
+    .filter((p) => p !== "outro")
+    .filter((p) => countByPlatform(p) > 0 || filters.platform === p);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => onOpenChange(!open)}
+        style={{
+          height: 32, padding: "0 12px", borderRadius: 8,
+          border: `1px solid ${activeCount > 0 ? "var(--ink-2)" : "var(--border)"}`,
+          background: activeCount > 0 ? "var(--surface-2)" : "var(--surface)",
+          color: "var(--ink-2)", fontSize: 12, cursor: "pointer",
+          display: "inline-flex", alignItems: "center", gap: 6,
+          fontFamily: "var(--font-sans)",
+        }}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="4" y1="6" x2="20" y2="6" />
+          <line x1="7" y1="12" x2="17" y2="12" />
+          <line x1="10" y1="18" x2="14" y2="18" />
+        </svg>
+        Filtros
+        {activeCount > 0 && (
+          <span className="mono" style={{
+            fontSize: 10, fontWeight: 700, padding: "1px 6px",
+            borderRadius: 999, background: "var(--ink)", color: "var(--accent-ink)",
+            fontVariantNumeric: "tabular-nums",
+          }}>
+            {activeCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 50,
+          width: 320,
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: 10, boxShadow: "0 12px 36px rgba(0,0,0,0.32)",
+          padding: 12,
+          display: "grid", gap: 12,
+        }}>
+          <FilterBlock label="Status">
+            <PopChip on={!filters.status} onClick={() => onFiltersChange({ ...filters, status: undefined })}>
+              Todos <Count n={totals.length} />
+            </PopChip>
+            {STATUS_ORDER.map((s) => {
+              const cfg = STATUS[s];
+              return (
+                <PopChip
+                  key={s}
+                  on={filters.status === s}
+                  onClick={() => onFiltersChange({ ...filters, status: filters.status === s ? undefined : s })}
+                  dot={cfg.color}
+                >
+                  {cfg.label} <Count n={countByStatus(s)} />
+                </PopChip>
+              );
+            })}
+          </FilterBlock>
+
+          <FilterBlock label="Período">
+            {(Object.keys(PERIOD_LABEL) as PeriodFilter[]).map((p) => (
+              <PopChip key={p} on={period === p} onClick={() => onPeriodChange(p)}>
+                {PERIOD_LABEL[p]}
+              </PopChip>
+            ))}
+          </FilterBlock>
+
+          {visiblePlatforms.length > 0 && (
+            <FilterBlock label="Plataforma">
+              <PopChip on={!filters.platform} onClick={() => onFiltersChange({ ...filters, platform: undefined })}>
+                Todas
+              </PopChip>
+              {visiblePlatforms.map((p) => {
+                const cfg = PLATFORM[p];
+                return (
+                  <PopChip
+                    key={p}
+                    on={filters.platform === p}
+                    onClick={() => onFiltersChange({ ...filters, platform: filters.platform === p ? undefined : p })}
+                    dot={cfg.color}
+                  >
+                    {cfg.label} <Count n={countByPlatform(p)} />
+                  </PopChip>
+                );
+              })}
+            </FilterBlock>
+          )}
+
+          <FilterBlock label="Prioridade">
+            <PopChip on={!filters.priority} onClick={() => onFiltersChange({ ...filters, priority: undefined })}>
+              Todas
+            </PopChip>
+            {(Object.keys(PRIORITY) as TaskPriority[]).map((p) => {
+              const cfg = PRIORITY[p];
+              return (
+                <PopChip
+                  key={p}
+                  on={filters.priority === p}
+                  onClick={() => onFiltersChange({ ...filters, priority: filters.priority === p ? undefined : p })}
+                  dot={cfg.color}
+                >
+                  {cfg.label}
+                </PopChip>
+              );
+            })}
+          </FilterBlock>
+
+          {team.length > 0 && (
+            <FilterBlock label="Responsável">
+              <PopChip on={!filters.assignee_id} onClick={() => onFiltersChange({ ...filters, assignee_id: undefined })}>
+                Todos
+              </PopChip>
+              {team.map((m) => (
+                <PopChip
+                  key={m.id}
+                  on={filters.assignee_id === m.id}
+                  onClick={() => onFiltersChange({ ...filters, assignee_id: filters.assignee_id === m.id ? undefined : m.id })}
+                  dot={m.avatar_color ?? "var(--ink-3)"}
+                >
+                  {m.name.split(" ")[0]}
+                </PopChip>
               ))}
-            </Section>
-          ))}
+            </FilterBlock>
+          )}
         </div>
       )}
-
-      {view === "kanban" && (
-        <KanbanBoard
-          tasks={filtered}
-          onChangeStatus={(id, status) => updateMut.mutate({ id, patch: { status } })}
-          onEdit={(t) => { setShowForm(false); setEditing(t); }}
-          onDelete={(id) => {
-            const t = (tasksQ.data ?? []).find((x) => x.id === id);
-            if (t && confirm(`Excluir "${t.title}"?`)) deleteMut.mutate(id);
-          }}
-        />
-      )}
     </div>
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────
-//  VIEW TOGGLE — Lista | Kanban
-// ──────────────────────────────────────────────────────────────────────
-
-function ViewToggle({ value, onChange }: { value: ViewMode; onChange: (v: ViewMode) => void }) {
+function FilterBlock({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="seg" style={{ fontSize: 11 }}>
-      <button className={value === "list" ? "on" : ""} onClick={() => onChange("list")} title="Visualização em lista">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, verticalAlign: "-2px" }}>
-          <line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" />
-          <line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" />
-        </svg>
-        Lista
-      </button>
-      <button className={value === "kanban" ? "on" : ""} onClick={() => onChange("kanban")} title="Visualização em kanban">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4, verticalAlign: "-2px" }}>
-          <rect x="3" y="3" width="6" height="18" rx="1" /><rect x="11" y="3" width="6" height="12" rx="1" /><rect x="19" y="3" width="2" height="8" rx="1" />
-        </svg>
-        Kanban
-      </button>
+    <div>
+      <div className="mono" style={{
+        fontSize: 9, color: "var(--ink-4)", letterSpacing: 0.8,
+        textTransform: "uppercase", fontWeight: 600, marginBottom: 6,
+      }}>
+        {label}
+      </div>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{children}</div>
+    </div>
+  );
+}
+
+function PopChip({ on, onClick, dot, children }: {
+  on?: boolean; onClick?: () => void; dot?: string; children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        padding: "3px 9px",
+        borderRadius: 999,
+        border: `1px solid ${on ? "var(--ink-2)" : "var(--border)"}`,
+        background: on ? "var(--ink)" : "var(--surface)",
+        color: on ? "var(--accent-ink)" : "var(--ink-2)",
+        fontSize: 11.5, cursor: "pointer", fontFamily: "var(--font-sans)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot }} />}
+      {children}
+    </button>
+  );
+}
+
+function Count({ n }: { n: number }) {
+  return (
+    <span className="mono" style={{ marginLeft: 2, fontSize: 9, opacity: 0.6, fontVariantNumeric: "tabular-nums" }}>
+      {n}
+    </span>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+//  ACTIVE FILTERS BAR — chips removíveis dos filtros aplicados
+// ──────────────────────────────────────────────────────────────────────
+
+function ActiveFiltersBar({
+  filters, period, search,
+  onClearStatus, onClearPriority, onClearPlatform, onClearTaskType, onClearAssignee, onClearPeriod, onClearSearch,
+  team,
+}: {
+  filters: TaskFilters; period: PeriodFilter; search: string;
+  onClearStatus: () => void; onClearPriority: () => void; onClearPlatform: () => void;
+  onClearTaskType: () => void; onClearAssignee: () => void; onClearPeriod: () => void; onClearSearch: () => void;
+  team: { id: number; name: string; avatar_color: string | null }[];
+}) {
+  const items: { label: string; dot?: string; onClear: () => void }[] = [];
+  if (search) items.push({ label: `"${search}"`, onClear: onClearSearch });
+  if (filters.status) items.push({ label: STATUS[filters.status].label, dot: STATUS[filters.status].color, onClear: onClearStatus });
+  if (period !== "all") items.push({ label: PERIOD_LABEL[period], onClear: onClearPeriod });
+  if (filters.platform) items.push({ label: PLATFORM[filters.platform].label, dot: PLATFORM[filters.platform].color, onClear: onClearPlatform });
+  if (filters.priority) items.push({ label: PRIORITY[filters.priority].label, dot: PRIORITY[filters.priority].color, onClear: onClearPriority });
+  if (filters.task_type) items.push({ label: TASK_TYPE[filters.task_type].label, onClear: onClearTaskType });
+  if (filters.assignee_id) {
+    const m = team.find((x) => x.id === filters.assignee_id);
+    if (m) items.push({ label: m.name.split(" ")[0], dot: m.avatar_color ?? "var(--ink-3)", onClear: onClearAssignee });
+  }
+
+  if (items.length === 0) return null;
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+      {items.map((it, i) => (
+        <span
+          key={i}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            padding: "3px 4px 3px 9px",
+            borderRadius: 999,
+            background: "var(--surface-2)", border: "1px solid var(--border)",
+            fontSize: 11, color: "var(--ink-2)", fontFamily: "var(--font-sans)",
+          }}
+        >
+          {it.dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: it.dot }} />}
+          {it.label}
+          <button
+            onClick={it.onClear}
+            aria-label={`Remover ${it.label}`}
+            style={{
+              background: "transparent", border: "none", color: "var(--ink-4)",
+              cursor: "pointer", padding: "0 4px", fontSize: 13, lineHeight: 1, borderRadius: 999,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--ink)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--ink-4)")}
+          >
+            ×
+          </button>
+        </span>
+      ))}
     </div>
   );
 }
 
 // ──────────────────────────────────────────────────────────────────────
-//  KANBAN BOARD — 4 colunas (todo/doing/waiting/done), drag-and-drop HTML5
+//  KANBAN BOARD — 4 colunas drag-and-drop via @dnd-kit
 // ──────────────────────────────────────────────────────────────────────
 
 function KanbanBoard({
-  tasks, onChangeStatus, onEdit, onDelete,
+  tasks, onEdit, onDelete,
 }: {
   tasks: Task[];
-  onChangeStatus: (id: number, s: TaskStatus) => void;
   onEdit: (t: Task) => void;
   onDelete: (id: number) => void;
 }) {
-  const [overCol, setOverCol] = useState<TaskStatus | null>(null);
-
   return (
     <div style={{
       display: "grid",
       gridTemplateColumns: "repeat(4, minmax(260px, 1fr))",
-      gap: 14,
-      marginTop: 16,
-      // Ocupa tudo até o fim da página. O valor compensa topbar + page-head + toolbar + chips.
-      minHeight: "calc(100vh - 360px)",
+      gap: 12,
+      minHeight: "calc(100vh - 280px)",
       alignItems: "stretch",
       overflowX: "auto",
       paddingBottom: 2,
     }}>
       {STATUS_ORDER.map((st) => {
         const col = tasks.filter((t) => t.status === st);
-        const cfg = STATUS[st];
-        const isOver = overCol === st;
         return (
-          <div
-            key={st}
-            onDragOver={(e) => { e.preventDefault(); if (overCol !== st) setOverCol(st); }}
-            onDragLeave={(e) => {
-              // só limpa se saiu do container pra algo fora (não pra filho)
-              const to = e.relatedTarget as Node | null;
-              if (!e.currentTarget.contains(to)) setOverCol((c) => (c === st ? null : c));
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setOverCol(null);
-              const id = Number(e.dataTransfer.getData("text/task-id"));
-              if (id && Number.isFinite(id)) onChangeStatus(id, st);
-            }}
-            style={{
-              background: "var(--surface)",
-              border: `1px solid ${isOver ? cfg.color : "var(--border)"}`,
-              boxShadow: isOver ? `inset 0 0 0 1px ${cfg.color}33` : "none",
-              borderRadius: 12,
-              display: "flex", flexDirection: "column",
-              transition: "border-color .12s, box-shadow .12s",
-              minHeight: 0,
-            }}
-          >
-            {/* Header da coluna */}
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-              padding: "12px 14px",
-              borderBottom: "1px solid var(--border)",
-            }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color }} />
-              <span style={{
-                fontSize: 11, fontWeight: 600, color: "var(--ink)",
-                letterSpacing: 0.3, textTransform: "uppercase",
-                fontFamily: "var(--font-mono)",
-              }}>
-                {cfg.label}
-              </span>
-              <span className="mono" style={{
-                marginLeft: "auto",
-                fontSize: 10, color: "var(--ink-4)",
-                padding: "1px 7px", borderRadius: 999,
-                background: "var(--surface-2)",
-                fontVariantNumeric: "tabular-nums", fontWeight: 600,
-              }}>
-                {col.length}
-              </span>
-            </div>
-
-            {/* Corpo da coluna */}
-            <div style={{
-              display: "flex", flexDirection: "column", gap: 8,
-              padding: 10, flex: 1,
-              overflowY: "auto",
-            }}>
-              {col.map((t) => (
-                <KanbanCard
-                  key={t.id}
-                  task={t}
-                  onEdit={() => onEdit(t)}
-                  onDelete={() => onDelete(t.id)}
-                />
-              ))}
-              {/* Zona de drop sempre visível (fica mais evidente quando hover) */}
-              <div
-                aria-hidden
-                style={{
-                  flex: 1,
-                  minHeight: col.length === 0 ? 120 : 60,
-                  marginTop: col.length === 0 ? 0 : 2,
-                  borderRadius: 6,
-                  background: isOver ? `${cfg.color}0f` : "transparent",
-                  border: isOver ? `1px dashed ${cfg.color}` : "1px dashed transparent",
-                  transition: "background .12s, border-color .12s",
-                }}
-              />
-            </div>
-          </div>
+          <KanbanColumn key={st} status={st} tasks={col} onEdit={onEdit} onDelete={onDelete} />
         );
       })}
+    </div>
+  );
+}
+
+function KanbanColumn({
+  status, tasks, onEdit, onDelete,
+}: {
+  status: TaskStatus;
+  tasks: Task[];
+  onEdit: (t: Task) => void;
+  onDelete: (id: number) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: status });
+  const cfg = STATUS[status];
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        display: "flex", flexDirection: "column", minHeight: 0,
+        borderRadius: 10,
+        background: isOver ? "var(--surface-2)" : "transparent",
+        outline: isOver ? `1px dashed ${cfg.color}` : "1px dashed transparent",
+        outlineOffset: -1,
+        transition: "background .12s, outline-color .12s",
+      }}
+    >
+      {/* Header — Linear-style: dot · label · count em ink-3 */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "4px 6px 10px",
+      }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: cfg.color, flexShrink: 0 }} />
+        <span style={{
+          fontSize: 12, fontWeight: 600, color: "var(--ink)",
+          fontFamily: "var(--font-sans)",
+        }}>
+          {cfg.label}
+        </span>
+        <span className="mono" style={{
+          fontSize: 11, color: "var(--ink-4)",
+          fontVariantNumeric: "tabular-nums",
+        }}>
+          {tasks.length}
+        </span>
+      </div>
+
+      {/* Cards */}
+      <div style={{
+        display: "flex", flexDirection: "column", gap: 6,
+        flex: 1, minHeight: 60,
+      }}>
+        {tasks.map((t) => (
+          <KanbanCard key={t.id} task={t} onEdit={() => onEdit(t)} onDelete={() => onDelete(t.id)} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -449,63 +624,56 @@ function KanbanCard({ task, onEdit, onDelete }: {
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: task.id });
   const [hover, setHover] = useState(false);
   const priCfg = PRIORITY[task.priority];
   const platformCfg = task.platform ? PLATFORM[task.platform] : null;
   const due = task.due_at ? new Date(task.due_at) : null;
   const overdue = due && task.status !== "done" && due < new Date();
   const initials = task.assignee_name ? task.assignee_name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase() : null;
+  const isDone = task.status === "done";
 
   return (
     <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData("text/task-id", String(task.id));
-        e.dataTransfer.effectAllowed = "move";
-      }}
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      onClick={onEdit}
+      onClick={(e) => {
+        // Click só dispara edit se não foi um drag
+        if ((e as React.MouseEvent).detail === 0) return;
+        onEdit();
+      }}
       role="button"
       tabIndex={0}
       style={{
         position: "relative",
-        background: "var(--surface-2)",
+        background: "var(--surface)",
         border: "1px solid var(--border)",
-        borderRadius: 6,
-        padding: "9px 10px 9px 10px",
-        cursor: "grab",
-        transition: "background .08s, border-color .08s",
+        borderLeft: `2px solid ${priCfg.color}`,
+        borderRadius: 8,
+        padding: "9px 10px",
+        cursor: isDragging ? "grabbing" : "grab",
+        opacity: isDragging ? 0.5 : isDone ? 0.62 : 1,
         userSelect: "none",
+        transition: "border-color .08s, background .08s",
       }}
     >
-      {/* Header com plataforma + ações no hover */}
-      <div style={{ display: "flex", alignItems: "center", gap: 6, minHeight: 14 }}>
-        {platformCfg && (
-          <span
-            title={platformCfg.label}
-            style={{
-              width: 16, height: 16, borderRadius: 3,
-              background: platformCfg.color, color: "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 8, fontWeight: 700, fontFamily: "var(--font-mono)",
-            }}
-          >
-            {platformCfg.label.slice(0, 1)}
-          </span>
-        )}
-        {task.ai_scheduled && (
-          <span className="mono" style={{
-            fontSize: 8, color: "oklch(0.45 0.18 125)",
-            background: "oklch(0.95 0.12 125)",
-            padding: "1px 4px", borderRadius: 3, letterSpacing: 0.4,
-            textTransform: "uppercase", fontWeight: 700,
-          }}>AI</span>
-        )}
-        <div style={{ flex: 1 }} />
+      {/* Título + ações no hover */}
+      <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+        <div style={{
+          flex: 1,
+          fontSize: 13, fontWeight: 500, color: "var(--ink)", lineHeight: 1.35,
+          textDecoration: isDone ? "line-through" : "none",
+          wordBreak: "break-word",
+        }}>
+          {task.title}
+        </div>
         {hover && (
-          <>
+          <div style={{ display: "flex", gap: 2, marginTop: -2 }}>
             <button
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
               title="Editar"
               style={{
@@ -519,50 +687,64 @@ function KanbanCard({ task, onEdit, onDelete }: {
               </svg>
             </button>
             <button
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
               title="Excluir"
               style={{
                 background: "transparent", border: "none",
                 color: "var(--ink-4)", cursor: "pointer", padding: 2,
-                fontSize: 10, lineHeight: 1,
+                fontSize: 11, lineHeight: 1,
               }}
             >✕</button>
-          </>
+          </div>
         )}
       </div>
 
-      {/* Título */}
-      <div style={{
-        fontSize: 13, fontWeight: 500, color: "var(--ink)",
-        marginTop: 4, lineHeight: 1.3,
-        textDecoration: task.status === "done" ? "line-through" : "none",
-      }}>
-        {task.title}
-      </div>
-
-      {/* Footer: due + assignee */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-        {due ? (
+      {/* Footer: meta line — prioridade · data · plataforma · AI · assignee */}
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 7, minHeight: 16 }}>
+        {due && (
           <span className="mono" style={{
             fontSize: 10, color: overdue ? "var(--neg)" : "var(--ink-3)",
-            fontWeight: overdue ? 600 : 400, letterSpacing: 0.2,
+            fontWeight: overdue ? 600 : 400, fontVariantNumeric: "tabular-nums",
+            display: "inline-flex", alignItems: "center", gap: 3,
           }}>
+            {overdue && <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--neg)" }} />}
             {formatDueLabel(due)}
           </span>
-        ) : (
-          <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)", fontStyle: "italic" }}>
-            sem data
+        )}
+        {platformCfg && (
+          <span
+            title={platformCfg.label}
+            style={{
+              fontSize: 9.5, color: "var(--ink-4)", fontFamily: "var(--font-mono)",
+              letterSpacing: 0.3,
+            }}
+          >
+            · {platformCfg.label.toLowerCase()}
           </span>
         )}
         <div style={{ flex: 1 }} />
+        {task.ai_scheduled && (
+          <span
+            title="Claude pode reagendar"
+            className="mono"
+            style={{
+              fontSize: 8, color: "oklch(0.55 0.18 130)", letterSpacing: 0.5,
+              textTransform: "uppercase", fontWeight: 700,
+            }}
+          >
+            ai
+          </span>
+        )}
         {initials && (
           <span
             title={task.assignee_name ?? ""}
             style={{
-              width: 20, height: 20, borderRadius: "50%",
+              width: 18, height: 18, borderRadius: "50%",
               background: task.assignee_color ?? "var(--ink-3)", color: "#fff",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 9, fontWeight: 700, fontFamily: "var(--font-sans)",
+              flexShrink: 0,
             }}
           >
             {initials}
@@ -570,384 +752,6 @@ function KanbanCard({ task, onEdit, onDelete }: {
         )}
       </div>
     </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────────────
-//  FILTER CHIPS
-// ──────────────────────────────────────────────────────────────────────
-
-function FilterChips({
-  filters, onFiltersChange, period, onPeriodChange, team, totals,
-}: {
-  filters: TaskFilters;
-  onFiltersChange: (f: TaskFilters) => void;
-  period: PeriodFilter;
-  onPeriodChange: (p: PeriodFilter) => void;
-  team: { id: number; name: string; avatar_color: string | null }[];
-  totals: Task[];
-}) {
-  const countByStatus = (s: TaskStatus) => totals.filter((t) => t.status === s).length;
-  const countByPlatform = (p: TaskPlatform) => totals.filter((t) => t.platform === p).length;
-
-  return (
-    <div style={{
-      display: "grid", gap: 8,
-      background: "var(--surface-2)",
-      padding: 10, borderRadius: 10, border: "1px solid var(--border)",
-    }}>
-      {/* Linha 1: Status */}
-      <ChipRow label="Status">
-        <Chip on={!filters.status} onClick={() => onFiltersChange({ ...filters, status: undefined })}>
-          Todos <Count n={totals.length} />
-        </Chip>
-        {STATUS_ORDER.map((s) => {
-          const cfg = STATUS[s];
-          const n = countByStatus(s);
-          return (
-            <Chip
-              key={s}
-              on={filters.status === s}
-              onClick={() => onFiltersChange({ ...filters, status: filters.status === s ? undefined : s })}
-              dot={cfg.color}
-            >
-              {cfg.label} <Count n={n} />
-            </Chip>
-          );
-        })}
-      </ChipRow>
-
-      {/* Linha 2: Período */}
-      <ChipRow label="Período">
-        {(Object.keys(PERIOD_LABEL) as PeriodFilter[]).map((p) => (
-          <Chip key={p} on={period === p} onClick={() => onPeriodChange(p)}>
-            {PERIOD_LABEL[p]}
-          </Chip>
-        ))}
-      </ChipRow>
-
-      {/* Linha 3: Plataforma */}
-      <ChipRow label="Plataforma">
-        <Chip on={!filters.platform} onClick={() => onFiltersChange({ ...filters, platform: undefined })}>
-          Todas
-        </Chip>
-        {(Object.keys(PLATFORM) as TaskPlatform[]).filter((p) => p !== "outro").map((p) => {
-          const cfg = PLATFORM[p];
-          const n = countByPlatform(p);
-          if (n === 0 && filters.platform !== p) return null;
-          return (
-            <Chip
-              key={p}
-              on={filters.platform === p}
-              onClick={() => onFiltersChange({ ...filters, platform: filters.platform === p ? undefined : p })}
-              dot={cfg.color}
-            >
-              {cfg.label} {n > 0 && <Count n={n} />}
-            </Chip>
-          );
-        })}
-      </ChipRow>
-
-      {/* Linha 4: Responsável */}
-      {team.length > 0 && (
-        <ChipRow label="Responsável">
-          <Chip on={!filters.assignee_id} onClick={() => onFiltersChange({ ...filters, assignee_id: undefined })}>
-            Todos
-          </Chip>
-          {team.map((m) => (
-            <Chip
-              key={m.id}
-              on={filters.assignee_id === m.id}
-              onClick={() => onFiltersChange({ ...filters, assignee_id: filters.assignee_id === m.id ? undefined : m.id })}
-              dot={m.avatar_color ?? "var(--ink-3)"}
-            >
-              {m.name.split(" ")[0]}
-            </Chip>
-          ))}
-        </ChipRow>
-      )}
-    </div>
-  );
-}
-
-function ChipRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-      <span className="mono" style={{
-        fontSize: 9, color: "var(--ink-4)", letterSpacing: 1,
-        textTransform: "uppercase", fontWeight: 600,
-        minWidth: 82,
-      }}>
-        {label}
-      </span>
-      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{children}</div>
-    </div>
-  );
-}
-
-function Chip({ on, onClick, dot, children }: { on?: boolean; onClick?: () => void; dot?: string; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 6,
-        padding: "4px 10px",
-        borderRadius: 999,
-        border: `1px solid ${on ? "var(--ink-2)" : "var(--border)"}`,
-        background: on ? "var(--ink)" : "var(--surface)",
-        color: on ? "var(--accent-ink)" : "var(--ink-2)",
-        fontSize: 12, cursor: "pointer", fontFamily: "var(--font-sans)",
-        transition: "background .08s, border .08s",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {dot && <span style={{ width: 6, height: 6, borderRadius: "50%", background: dot }} />}
-      {children}
-    </button>
-  );
-}
-
-function Count({ n }: { n: number }) {
-  return (
-    <span className="mono" style={{ marginLeft: 4, fontSize: 10, opacity: 0.55, fontVariantNumeric: "tabular-nums" }}>
-      {n}
-    </span>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────────────
-//  SECTION (grupo temporal)
-// ──────────────────────────────────────────────────────────────────────
-
-function Section({ group, children }: { group: Group; children: React.ReactNode }) {
-  const color = group.tone === "neg" ? "var(--neg)" : group.tone === "ink" ? "var(--ink)" : "var(--ink-4)";
-  return (
-    <section>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-        <h3 className="mono" style={{
-          fontSize: 11, color, letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 600,
-        }}>
-          {group.label}
-        </h3>
-        <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)" }}>{group.items.length}</span>
-        <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-      </div>
-      <div style={{ display: "grid", gap: 6 }}>{children}</div>
-    </section>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────────────
-//  TASK CARD (linha)
-// ──────────────────────────────────────────────────────────────────────
-
-function TaskCard({
-  task, team, onChangeStatus, onChangeAssignee, onToggleDone, onEdit, onDelete,
-}: {
-  task: Task;
-  team: { id: number; name: string; avatar_color: string | null }[];
-  onChangeStatus: (s: TaskStatus) => void;
-  onChangeAssignee: (id: number | null) => void;
-  onToggleDone: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-}) {
-  const [hover, setHover] = useState(false);
-  const priCfg = PRIORITY[task.priority];
-  const platformCfg = task.platform ? PLATFORM[task.platform] : null;
-  const typeCfg = task.task_type ? TASK_TYPE[task.task_type] : null;
-  const due = task.due_at ? new Date(task.due_at) : null;
-  const overdue = due && task.status !== "done" && due < new Date();
-  const isDone = task.status === "done";
-
-  const dueLabel = due ? formatDueLabel(due) : null;
-
-  return (
-    <div
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "3px auto 1fr auto auto auto",
-        gap: 12, alignItems: "center",
-        padding: "12px 14px 12px 0",
-        borderRadius: 8,
-        background: hover ? "var(--hover)" : "var(--surface)",
-        border: "1px solid var(--border)",
-        transition: "background .08s, border-color .08s",
-        opacity: isDone ? 0.58 : 1,
-      }}
-    >
-      {/* Faixa de prioridade */}
-      <div style={{ width: 3, alignSelf: "stretch", background: priCfg.color, borderRadius: "8px 0 0 8px" }} />
-
-      {/* Checkbox + Platform (esquerda) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 12 }}>
-        <Checkbox
-          checked={isDone}
-          onToggle={onToggleDone}
-          title={isDone ? "Reabrir tarefa" : "Marcar como concluída"}
-        />
-        {platformCfg && (
-          <span
-            title={platformCfg.label}
-            style={{
-              width: 22, height: 22, borderRadius: 5,
-              background: platformCfg.color, color: "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 10, fontWeight: 700, fontFamily: "var(--font-mono)",
-              letterSpacing: 0.3,
-            }}
-          >
-            {platformCfg.label.slice(0, 1)}
-          </span>
-        )}
-      </div>
-
-      {/* Título + meta */}
-      <div style={{ minWidth: 0 }}>
-        <div style={{
-          fontSize: 13, fontWeight: 500, color: "var(--ink)",
-          textDecoration: isDone ? "line-through" : "none",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-        }}>
-          {task.title}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
-          {typeCfg && (
-            <span className="mono" style={{
-              fontSize: 9, color: "var(--ink-3)", letterSpacing: 0.6,
-              textTransform: "uppercase", fontWeight: 500,
-            }}>
-              {typeCfg.label}
-            </span>
-          )}
-          {task.task_type && task.duration_min && (
-            <span style={{ fontSize: 9, color: "var(--ink-4)" }}>·</span>
-          )}
-          {task.duration_min && (
-            <span className="mono" style={{ fontSize: 9, color: "var(--ink-4)" }}>
-              {task.duration_min}min
-            </span>
-          )}
-          {task.ai_scheduled && (
-            <span
-              title="Claude pode reagendar"
-              className="mono"
-              style={{
-                fontSize: 8, color: "oklch(0.45 0.18 125)",
-                background: "oklch(0.95 0.12 125)",
-                padding: "1px 5px", borderRadius: 3, letterSpacing: 0.5,
-                textTransform: "uppercase", fontWeight: 700,
-              }}
-            >
-              AI
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Due */}
-      <div style={{ textAlign: "right", minWidth: 110 }}>
-        {dueLabel ? (
-          <div
-            title={due!.toLocaleString("pt-BR")}
-            className="mono"
-            style={{
-              fontSize: 11, color: overdue ? "var(--neg)" : "var(--ink-3)",
-              fontWeight: overdue ? 600 : 400, letterSpacing: 0.2,
-            }}
-          >
-            {dueLabel}
-          </div>
-        ) : (
-          <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)", fontStyle: "italic" }}>
-            sem data
-          </span>
-        )}
-      </div>
-
-      {/* Assignee */}
-      <AssigneePicker
-        currentId={task.assignee_id}
-        currentName={task.assignee_name}
-        currentColor={task.assignee_color}
-        team={team}
-        onChange={onChangeAssignee}
-      />
-
-      {/* Status + actions */}
-      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-        <StatusMenu current={task.status} onChange={onChangeStatus} />
-        <button
-          onClick={onEdit}
-          title="Editar tarefa"
-          aria-label="Editar tarefa"
-          style={{
-            background: "transparent", border: "none",
-            color: hover ? "var(--ink-3)" : "transparent",
-            cursor: "pointer", fontSize: 12, padding: "6px 7px",
-            borderRadius: 5, transition: "color .08s, background .08s",
-            lineHeight: 1,
-          }}
-          onMouseEnter={(e) => { if (hover) { e.currentTarget.style.background = "var(--surface-2)"; e.currentTarget.style.color = "var(--ink)"; } }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = hover ? "var(--ink-3)" : "transparent"; }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            <path d="M12 20h9" />
-            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-          </svg>
-        </button>
-        <button
-          onClick={onDelete}
-          title="Excluir"
-          aria-label="Excluir tarefa"
-          style={{
-            background: "transparent", border: "none",
-            color: hover ? "var(--ink-4)" : "transparent",
-            cursor: "pointer", fontSize: 13, padding: "6px 7px",
-            borderRadius: 5, transition: "color .08s, background .08s",
-            lineHeight: 1,
-          }}
-        >
-          ✕
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────────────
-//  CHECKBOX (custom, sem estilo default do browser)
-// ──────────────────────────────────────────────────────────────────────
-
-function Checkbox({ checked, onToggle, title }: { checked: boolean; onToggle: () => void; title?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={(e) => { e.stopPropagation(); onToggle(); }}
-      role="checkbox"
-      aria-checked={checked}
-      title={title}
-      style={{
-        width: 18, height: 18, borderRadius: 5,
-        border: `1.5px solid ${checked ? "var(--pos)" : "var(--border-2)"}`,
-        background: checked ? "var(--pos)" : "transparent",
-        cursor: "pointer", padding: 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        transition: "background .12s, border-color .12s",
-        flexShrink: 0,
-      }}
-      onMouseEnter={(e) => { if (!checked) e.currentTarget.style.borderColor = "var(--ink-2)"; }}
-      onMouseLeave={(e) => { if (!checked) e.currentTarget.style.borderColor = "var(--border-2)"; }}
-    >
-      {checked && (
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <polyline points="20 6 9 17 4 12" />
-        </svg>
-      )}
-    </button>
   );
 }
 
@@ -967,154 +771,34 @@ function formatDueLabel(d: Date): string {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-//  STATUS MENU (clean dropdown)
+//  SKELETON
 // ──────────────────────────────────────────────────────────────────────
 
-function StatusMenu({ current, onChange }: { current: TaskStatus; onChange: (s: TaskStatus) => void }) {
-  const [open, setOpen] = useState(false);
-  const cfg = STATUS[current];
+function SkeletonBoard() {
   return (
-    <div style={{ position: "relative" }}>
-      <button
-        type="button"
-        onClick={() => setOpen((s) => !s)}
-        style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          padding: "4px 10px 4px 8px",
-          borderRadius: 999,
-          background: cfg.bg, color: cfg.color,
-          border: "none", cursor: "pointer",
-          fontSize: 11, fontFamily: "var(--font-sans)",
-          fontWeight: 600, letterSpacing: 0.2,
-        }}
-      >
-        <span style={{ width: 6, height: 6, borderRadius: "50%", background: cfg.color }} />
-        {cfg.label}
-      </button>
-      {open && (
-        <>
-          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
-          <div style={{
-            position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 41, minWidth: 140,
-            background: "var(--surface)", border: "1px solid var(--border)",
-            borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.14)", padding: 4,
-          }}>
-            {STATUS_ORDER.map((s) => {
-              const c = STATUS[s];
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => { onChange(s); setOpen(false); }}
-                  style={{
-                    width: "100%", display: "flex", alignItems: "center", gap: 8,
-                    padding: "6px 10px", borderRadius: 5,
-                    background: s === current ? "var(--surface-2)" : "transparent",
-                    border: "none", cursor: "pointer",
-                    fontSize: 12, color: "var(--ink-2)", fontFamily: "var(--font-sans)",
-                    textAlign: "left",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.background = s === current ? "var(--surface-2)" : "transparent")}
-                >
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: c.color }} />
-                  {c.label}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────────────
-//  ASSIGNEE PICKER
-// ──────────────────────────────────────────────────────────────────────
-
-function AssigneePicker({
-  currentId, currentName, currentColor, team, onChange,
-}: {
-  currentId: number | null;
-  currentName: string | null;
-  currentColor: string | null;
-  team: { id: number; name: string; avatar_color: string | null }[];
-  onChange: (id: number | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const initials = currentName ? currentName.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase() : null;
-
-  return (
-    <div style={{ position: "relative" }}>
-      <button
-        type="button"
-        onClick={() => setOpen((s) => !s)}
-        title={currentName ?? "Atribuir"}
-        style={{
-          width: 26, height: 26, borderRadius: "50%",
-          background: currentColor ?? "transparent",
-          color: "#fff",
-          border: currentId ? "none" : "1px dashed var(--border-2)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 10, fontWeight: 700, cursor: "pointer",
-          fontFamily: "var(--font-sans)",
-        }}
-      >
-        {initials ?? <span style={{ color: "var(--ink-4)", fontWeight: 400 }}>?</span>}
-      </button>
-      {open && (
-        <>
-          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
-          <div style={{
-            position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 41, minWidth: 180,
-            background: "var(--surface)", border: "1px solid var(--border)",
-            borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,0.14)", padding: 4,
-          }}>
-            <button
-              type="button"
-              onClick={() => { onChange(null); setOpen(false); }}
-              style={{
-                width: "100%", padding: "6px 10px", borderRadius: 5,
-                background: "transparent", border: "none", cursor: "pointer",
-                fontSize: 12, color: "var(--ink-3)", textAlign: "left",
-              }}
-            >
-              Sem responsável
-            </button>
-            {team.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => { onChange(m.id); setOpen(false); }}
-                style={{
-                  width: "100%", display: "flex", alignItems: "center", gap: 8,
-                  padding: "6px 10px", borderRadius: 5,
-                  background: m.id === currentId ? "var(--surface-2)" : "transparent",
-                  border: "none", cursor: "pointer",
-                  fontSize: 12, color: "var(--ink-2)", fontFamily: "var(--font-sans)",
-                  textAlign: "left",
-                }}
-              >
-                <span style={{
-                  width: 18, height: 18, borderRadius: "50%",
-                  background: m.avatar_color ?? "var(--ink-3)",
-                  color: "#fff", fontSize: 9, fontWeight: 700,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  {m.name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase()}
-                </span>
-                {m.name}
-              </button>
-            ))}
-            {team.length === 0 && (
-              <div style={{ padding: 10, fontSize: 11, color: "var(--ink-4)", fontStyle: "italic" }}>
-                Nenhum membro cadastrado.
-              </div>
-            )}
-          </div>
-        </>
-      )}
+    <div style={{
+      display: "grid", gridTemplateColumns: "repeat(4, minmax(260px, 1fr))", gap: 12, marginTop: 4,
+    }}>
+      {[...Array(4)].map((_, i) => (
+        <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ height: 28, width: 110, borderRadius: 6, background: "var(--surface-2)" }} />
+          {[...Array(2)].map((_, j) => (
+            <div key={j} style={{
+              height: 64, borderRadius: 8,
+              background: "linear-gradient(90deg, var(--surface), var(--surface-2), var(--surface))",
+              backgroundSize: "200% 100%",
+              animation: "skeleton-shimmer 1.5s ease-in-out infinite",
+              border: "1px solid var(--border)",
+            }} />
+          ))}
+        </div>
+      ))}
+      <style>{`
+        @keyframes skeleton-shimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -1253,7 +937,7 @@ function NewTaskForm({
 }
 
 // ──────────────────────────────────────────────────────────────────────
-//  EDIT MODAL — overlay centralizado com o mesmo form pré-preenchido
+//  EDIT MODAL — overlay com mesmo form pré-preenchido
 // ──────────────────────────────────────────────────────────────────────
 
 function TaskEditModal({
@@ -1266,7 +950,6 @@ function TaskEditModal({
   submitting: boolean;
   error: string | null;
 }) {
-  // Fecha com ESC
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCancel(); };
     window.addEventListener("keydown", onKey);
@@ -1346,32 +1029,6 @@ function SelectField({ label, value, onChange, options }: {
           <option key={v || "none"} value={v}>{l}</option>
         ))}
       </select>
-    </div>
-  );
-}
-
-// ──────────────────────────────────────────────────────────────────────
-//  SKELETON
-// ──────────────────────────────────────────────────────────────────────
-
-function SkeletonList() {
-  return (
-    <div style={{ display: "grid", gap: 6, marginTop: 16 }}>
-      {[...Array(3)].map((_, i) => (
-        <div key={i} style={{
-          height: 52, borderRadius: 8,
-          background: "linear-gradient(90deg, var(--surface), var(--surface-2), var(--surface))",
-          backgroundSize: "200% 100%",
-          animation: "skeleton-shimmer 1.5s ease-in-out infinite",
-          border: "1px solid var(--border)",
-        }} />
-      ))}
-      <style>{`
-        @keyframes skeleton-shimmer {
-          0%   { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-      `}</style>
     </div>
   );
 }

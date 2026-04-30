@@ -147,14 +147,14 @@ export function FilesTab({ slug }: { slug: string }) {
     <div style={{ position: "relative" }}>
       {/* ── TOOLBAR superior ──────────────────────────────────── */}
       <div style={{
-        display: "flex", gap: 10, alignItems: "center",
-        marginBottom: 14, flexWrap: "wrap",
+        display: "flex", gap: 8, alignItems: "center",
+        marginBottom: 12, flexWrap: "wrap",
       }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 220, maxWidth: 360 }}>
+        <div style={{ position: "relative", flex: "1 1 280px", maxWidth: 360 }}>
           <svg
-            width="14" height="14" viewBox="0 0 24 24" fill="none"
+            width="13" height="13" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            style={{ position: "absolute", left: 11, top: 11, color: "var(--ink-4)" }}
+            style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", color: "var(--ink-4)" }}
           >
             <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
           </svg>
@@ -163,10 +163,10 @@ export function FilesTab({ slug }: { slug: string }) {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar arquivo…"
             style={{
-              width: "100%", padding: "9px 12px 9px 34px",
+              width: "100%", padding: "7px 11px 7px 32px", height: 32,
               borderRadius: 8, border: "1px solid var(--border)",
-              background: "var(--surface-2)", color: "var(--ink)",
-              fontSize: 13, outline: "none",
+              background: "var(--surface)", color: "var(--ink)",
+              fontSize: 12.5, outline: "none",
             }}
           />
         </div>
@@ -390,16 +390,15 @@ function UploadCategoryPill({
         onClick={() => setOpen((s) => !s)}
         title="Categoria do próximo upload"
         style={{
+          height: 32, padding: "0 11px", borderRadius: 8,
           display: "inline-flex", alignItems: "center", gap: 7,
-          padding: "7px 11px", borderRadius: 8,
-          background: "var(--surface-2)", border: "1px solid var(--border)",
+          background: "var(--surface)", border: "1px solid var(--border)",
           color: "var(--ink-2)", cursor: "pointer",
-          fontSize: 11, fontFamily: "var(--font-sans)",
+          fontSize: 12, fontFamily: "var(--font-sans)",
         }}
       >
         <span style={{ width: 6, height: 6, borderRadius: "50%", background: cfg.color }} />
-        <span className="mono" style={{ color: "var(--ink-4)", letterSpacing: 0.4 }}>CATEGORIA</span>
-        <span style={{ fontWeight: 600 }}>{cfg.label}</span>
+        <span style={{ fontWeight: 500 }}>{cfg.label}</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
           <polyline points="6 9 12 15 18 9" />
         </svg>

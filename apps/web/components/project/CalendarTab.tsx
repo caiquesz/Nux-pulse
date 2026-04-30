@@ -249,16 +249,28 @@ export function CalendarTab({ slug }: { slug: string }) {
 
       {/* ── LEGENDA ──────────────────────────────────────────────── */}
       <div style={{
-        display: "flex", gap: 14, marginTop: 12, fontSize: 10, color: "var(--ink-4)",
+        display: "flex", gap: 18, marginTop: 12, fontSize: 10, color: "var(--ink-4)",
         fontFamily: "var(--font-mono)", letterSpacing: 0.3, flexWrap: "wrap",
+        alignItems: "center",
       }}>
-        <span style={{ color: "var(--ink-3)" }}>Prioridade:</span>
-        {(["urgente", "alta", "media", "baixa"] as const).map((p) => (
-          <span key={p} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 3, height: 10, background: PRIORITY[p].color, borderRadius: 1 }} />
-            {PRIORITY[p].label}
-          </span>
-        ))}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: "var(--ink-3)" }}>Status</span>
+          {(["todo", "doing", "waiting", "done"] as const).map((s) => (
+            <span key={s} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 5, height: 5, background: STATUS[s].color, borderRadius: "50%" }} />
+              {STATUS[s].label}
+            </span>
+          ))}
+        </span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <span style={{ color: "var(--ink-3)" }}>Prioridade</span>
+          {(["urgente", "alta", "media", "baixa"] as const).map((p) => (
+            <span key={p} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 2, height: 9, background: PRIORITY[p].color, borderRadius: 1 }} />
+              {PRIORITY[p].label}
+            </span>
+          ))}
+        </span>
       </div>
 
       {/* ── TAREFAS SEM DATA ─────────────────────────────────────── */}
@@ -430,10 +442,12 @@ function DayCell({
         {isToday ? (
           <span style={{
             display: "inline-flex", alignItems: "center", justifyContent: "center",
-            minWidth: 22, height: 22, padding: "0 7px", borderRadius: 999,
-            background: "var(--hero)", color: "#fff",
+            minWidth: 22, height: 22, padding: "0 6px", borderRadius: 999,
+            border: "1.5px solid var(--hero)",
+            color: "var(--hero)",
             fontSize: 12, fontWeight: 700, fontFamily: "var(--font-sans)",
             fontVariantNumeric: "tabular-nums", letterSpacing: 0.2,
+            marginLeft: 2,
           }}>
             {date.getDate()}
           </span>
@@ -513,13 +527,14 @@ function DayTaskChip({ task, onClick }: { task: Task; onClick: () => void }) {
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onClick(); }}
-      title={`${task.title} · ${statusCfg.label}`}
+      title={`${task.title} · ${statusCfg.label} · ${priCfg.label}`}
       style={{
-        display: "flex", alignItems: "center", gap: 5,
-        padding: "3px 6px 3px 4px",
+        display: "flex", alignItems: "center", gap: 6,
+        padding: "3px 6px 3px 5px",
         background: "transparent",
         border: "none",
-        borderRadius: 2,
+        borderLeft: `2px solid ${priCfg.color}`,
+        borderRadius: 3,
         cursor: "pointer", textAlign: "left", width: "100%",
         overflow: "hidden",
         transition: "background .08s",
@@ -527,16 +542,20 @@ function DayTaskChip({ task, onClick }: { task: Task; onClick: () => void }) {
       onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-2)")}
       onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
     >
+      <span style={{
+        width: 5, height: 5, borderRadius: "50%",
+        background: statusCfg.color, flexShrink: 0,
+      }} />
       {hhmm && (
         <span className="mono" style={{
-          fontSize: 9, color: "var(--ink-4)", letterSpacing: 0.2,
-          fontVariantNumeric: "tabular-nums", flexShrink: 0,
+          fontSize: 9.5, color: "var(--ink-4)", letterSpacing: 0.2,
+          fontVariantNumeric: "tabular-nums", flexShrink: 0, fontWeight: 500,
         }}>
           {hhmm}
         </span>
       )}
       <span style={{
-        fontSize: 11, fontWeight: 500,
+        fontSize: 11.5, fontWeight: 500,
         color: done ? "var(--ink-4)" : "var(--ink-2)",
         textDecoration: done ? "line-through" : "none",
         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
