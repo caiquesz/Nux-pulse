@@ -423,7 +423,7 @@ function DayCell({
       role="button"
       style={{
         position: "relative",
-        minHeight: 88, // era 112 — calendario mais compacto
+        minHeight: 88,
         padding: 5,
         // Hoje ganha tint laranja bem sutil; demais usam surface ou surface-2
         background: isToday
@@ -435,6 +435,9 @@ function DayCell({
         transition: "background .08s",
         display: "flex", flexDirection: "column", gap: 3,
         opacity: inMonth ? 1 : 0.45,
+        // Garante que conteudo (tarefas com titulo longo) nao vaze pra cell vizinha
+        overflow: "hidden",
+        minWidth: 0,
       }}
     >
       {/* Header da célula: número top-left + plus no hover */}
@@ -526,7 +529,15 @@ function DayTaskChip({ task, onClick }: { task: Task; onClick: () => void }) {
         border: "none",
         borderLeft: `2px solid ${priCfg.color}`,
         borderRadius: 3,
-        cursor: "pointer", textAlign: "left", width: "100%",
+        cursor: "pointer", textAlign: "left",
+        // width:100% + min-width:0 + max-width:100% e box-sizing:border-box
+        // sao todos necessarios pra o flex permitir o filho com text-overflow
+        // encolher abaixo do width natural do conteudo. Sem isso o chip ignora
+        // ellipsis e vaza pra cell vizinha.
+        width: "100%",
+        minWidth: 0,
+        maxWidth: "100%",
+        boxSizing: "border-box",
         overflow: "hidden",
         transition: "background .08s",
       }}
