@@ -66,12 +66,14 @@ export function DateRangePicker({ value, onChange, placeholder = "Personalizado"
     };
   }, []);
 
-  // Auto-apply: quando draft tem from + to (range completo) e diferentes do
-  // value atual, aplica e fecha automaticamente. Pequeno delay pra dar tempo
-  // do usuario ajustar caso clique errado.
+  // Auto-apply: quando draft tem range MULTI-DIA completo (from !== to),
+  // aplica e fecha automaticamente. Single-day requer clicar "Aplicar"
+  // explicitamente — necessario porque a lib seta from=to no primeiro
+  // click, e auto-apply imediato roubaria a chance de selecionar o fim.
   useEffect(() => {
     if (!open || !interactedRef.current) return;
     if (!draft?.from || !draft?.to) return;
+    if (sameDay(draft.from, draft.to)) return; // 1-dia: aguarda Aplicar
     if (rangesEqual(draft, value)) return;
     const id = setTimeout(() => {
       onChange(draft);
