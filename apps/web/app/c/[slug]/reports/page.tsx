@@ -90,66 +90,100 @@ export default function ReportsPage() {
          ═══════════════════════════════════════════════════════════════ */}
       <div className="report-doc" style={{ maxWidth: 860, margin: "0 auto", display: "grid", gap: 0 }}>
 
-        {/* ── HERO (capa) ─────────────────────────────────────────── */}
+        {/* ── HERO (capa) ─────────────────────────────────────────────
+             Estetica editorial: bg preto profundo, accent so como hairline
+             vertical e em UM numero-chave da frase-resumo. Sem gradiente
+             colorido — o respiro vem da tipografia e do espacamento. */}
         <section
           className="report-hero"
           style={{
-            background: "#0B0B0A",
+            background: "#0A0A09",
             color: "#F5F2EB",
-            padding: "56px 48px 48px",
+            padding: "64px 56px 56px",
             borderRadius: "16px 16px 0 0",
             position: "relative",
             overflow: "hidden",
+            borderBottom: `1px solid ${heroAccent}`,
           }}
         >
           <div
             aria-hidden
             style={{
               position: "absolute", inset: 0,
-              background: `radial-gradient(600px circle at 85% 20%, ${heroAccent}26, transparent 60%)`,
+              background: "radial-gradient(800px circle at 90% -10%, rgba(255,255,255,0.045), transparent 55%)",
               pointerEvents: "none",
             }}
           />
-          <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32 }}>
-            <div className="mono" style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "rgba(245,242,235,0.5)" }}>
+          {/* Top bar: assinatura NUX a esquerda, marker do relatorio a direita */}
+          <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 56 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 9, color: "rgba(245,242,235,0.75)" }}>
+              <NuxBars size="sm" />
+              <span className="mono" style={{ fontSize: 11, letterSpacing: "0.14em", fontWeight: 600 }}>NUX PULSE</span>
+            </div>
+            <div className="mono" style={{
+              fontSize: 9.5, letterSpacing: "0.18em", textTransform: "uppercase",
+              color: "rgba(245,242,235,0.42)", fontWeight: 600,
+              padding: "5px 10px", border: "1px solid rgba(245,242,235,0.14)",
+              borderRadius: 999,
+            }}>
               Relatório · Performance
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "rgba(245,242,235,0.8)" }}>
-              <NuxBars size="sm" />
-              <span className="mono" style={{ fontSize: 11, letterSpacing: "0.08em" }}>NUX PULSE</span>
+          </div>
+
+          {/* Titulo do cliente em escala editorial */}
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <div className="mono" style={{
+              fontSize: 10, color: "rgba(245,242,235,0.45)",
+              letterSpacing: "0.16em", textTransform: "uppercase", fontWeight: 600,
+              marginBottom: 14,
+            }}>
+              Cliente
+            </div>
+            <h1 style={{
+              fontSize: 56, fontWeight: 700, letterSpacing: "-0.025em",
+              lineHeight: 0.98, marginBottom: 14, color: "#F5F2EB",
+            }}>
+              {clientName}
+            </h1>
+            <div className="mono" style={{
+              fontSize: 11.5, color: "rgba(245,242,235,0.55)",
+              letterSpacing: "0.06em", fontWeight: 500,
+            }}>
+              Últimos {days} dias · Gerado em {now.toLocaleDateString("pt-BR")} às {now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
             </div>
           </div>
 
-          <h1 style={{ fontSize: 42, fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.05, marginBottom: 10 }}>
-            {clientName}
-          </h1>
-          <div className="mono" style={{ fontSize: 12, color: "rgba(245,242,235,0.55)", letterSpacing: "0.04em" }}>
-            Últimos {days} dias · Gerado em {now.toLocaleDateString("pt-BR")} às {now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-          </div>
-
-          {/* Frase-resumo — a history em 1 linha */}
+          {/* Frase-resumo — narrativa editorial. Apenas o numero-chave em accent. */}
           {ov && primaryConversion && (
-            <div style={{ marginTop: 36, fontSize: 20, lineHeight: 1.5, maxWidth: 640, color: "#ffffff", fontWeight: 400 }}>
+            <div style={{
+              position: "relative", zIndex: 1,
+              marginTop: 56, fontSize: 19, lineHeight: 1.55, maxWidth: 660,
+              color: "rgba(245,242,235,0.92)", fontWeight: 400,
+            }}>
               Nesse período investimos{" "}
-              <strong style={{ color: heroAccent, fontWeight: 600 }}>{fmtBRL(ov.spend)}</strong>
-              {" "}gerando{" "}
-              <strong style={{ color: heroAccent, fontWeight: 600 }}>
+              <strong style={{ color: "#F5F2EB", fontWeight: 600 }}>{fmtBRL(ov.spend)}</strong>
+              {" "}e geramos{" "}
+              <strong style={{ color: heroAccent, fontWeight: 700 }}>
                 {fmtInt(primaryConversion.value)} {primaryConversion.value === 1 ? primaryConversion.label : primaryConversion.plural}
               </strong>
               {" "}a um custo médio de{" "}
-              <strong style={{ color: heroAccent, fontWeight: 600 }}>{fmtBRL(primaryConversion.cost)}</strong> cada
+              <strong style={{ color: "#F5F2EB", fontWeight: 600 }}>{fmtBRL(primaryConversion.cost)}</strong> cada
               {typeof deltaConv === "number" && deltaConv !== 0 && (
-                <> — <span style={{ color: deltaConv > 0 ? "oklch(0.75 0.20 140)" : "oklch(0.68 0.18 28)" }}>
-                  {deltaConv > 0 ? "+" : ""}{deltaConv.toFixed(0)}% vs. período anterior
+                <>, <span style={{ color: deltaConv > 0 ? "rgba(165,210,170,0.95)" : "rgba(225,165,160,0.95)", fontWeight: 500 }}>
+                  {deltaConv > 0 ? "uma alta" : "uma queda"} de {Math.abs(deltaConv).toFixed(0)}% vs. o período anterior
                 </span></>
               )}.
             </div>
           )}
           {ov && !primaryConversion && (
-            <div style={{ marginTop: 36, fontSize: 20, lineHeight: 1.5, color: "#ffffff" }}>
-              Nesse período investimos <strong style={{ color: heroAccent }}>{fmtBRL(ov.spend)}</strong>{" "}
-              alcançando <strong style={{ color: heroAccent }}>{fmtIntCompact(ov.reach ?? 0)}</strong> pessoas
-              com <strong style={{ color: heroAccent }}>{fmtIntCompact(ov.impressions)}</strong> impressões.
+            <div style={{
+              position: "relative", zIndex: 1,
+              marginTop: 56, fontSize: 19, lineHeight: 1.55, maxWidth: 660,
+              color: "rgba(245,242,235,0.92)",
+            }}>
+              Nesse período investimos <strong style={{ color: "#F5F2EB", fontWeight: 600 }}>{fmtBRL(ov.spend)}</strong>{" "}
+              alcançando <strong style={{ color: heroAccent, fontWeight: 700 }}>{fmtIntCompact(ov.reach ?? 0)}</strong> pessoas
+              com <strong style={{ color: "#F5F2EB", fontWeight: 600 }}>{fmtIntCompact(ov.impressions)}</strong> impressões.
             </div>
           )}
         </section>
@@ -202,7 +236,16 @@ export default function ReportsPage() {
           {ov && (
             <section>
               <SectionHeader num="02" title="Números que importam" subtitle="As 4 métricas principais" />
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+              <div style={{
+                display: "grid",
+                // Forca 4-em-linha em desktop A4-friendly; cai pra 2 em mobile.
+                gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                gap: 1,
+                background: "var(--border)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+                overflow: "hidden",
+              }}>
                 <BigKpi label="Investimento" value={fmtBRL(ov.spend)} delta={deltaSpend ?? null} inverse />
                 <BigKpi
                   label={primaryConversion?.plural ?? "Conversões"}
@@ -233,9 +276,9 @@ export default function ReportsPage() {
                 title="Tendência diária"
                 subtitle={primaryConversion ? `Investimento vs. ${primaryConversion.plural.toLowerCase()} ao longo dos ${days} dias` : `Investimento ao longo dos ${days} dias`}
               />
-              {/* Paleta brand: laranja (--data-orange) primario + violet
-                  (--data-violet) secundario. Saturadas pra render bem em
-                  PDF/tela ao mesmo tempo. */}
+              {/* Paleta editorial: investimento em accent (--hero), conversoes
+                  em ink-2 (cream claro). Evita 2 cores saturadas competindo
+                  e mantem hierarquia limpa em dark mode. */}
               <div style={{
                 background: "var(--surface)",
                 border: "1px solid var(--border)",
@@ -249,12 +292,12 @@ export default function ReportsPage() {
                   flexWrap: "wrap",
                 }}>
                   <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ width: 16, height: 3, background: "var(--data-orange)", borderRadius: 1 }} />
+                    <span style={{ width: 16, height: 3, background: "var(--hero)", borderRadius: 1 }} />
                     Investimento <span style={{ color: "var(--ink-4)", fontWeight: 400, textTransform: "none" }}>(eixo esquerdo)</span>
                   </span>
                   {primaryConversion && convSeries.length > 0 && (
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ width: 16, height: 3, background: "var(--data-violet)", borderRadius: 1 }} />
+                      <span style={{ width: 16, height: 3, background: "var(--ink-2)", borderRadius: 1 }} />
                       {primaryConversion.plural} <span style={{ color: "var(--ink-4)", fontWeight: 400, textTransform: "none" }}>(eixo direito)</span>
                     </span>
                   )}
@@ -269,9 +312,9 @@ export default function ReportsPage() {
                   compareLabel={primaryConversion?.plural}
                   compareFormat={(v) => Math.round(v).toLocaleString("pt-BR")}
                   height={240}
-                  lineColor="var(--data-orange)"
-                  fillColor="oklch(0.74 0.20 50 / 0.16)"
-                  compareColor="var(--data-violet)"
+                  lineColor="var(--hero)"
+                  fillColor="oklch(0.74 0.20 50 / 0.14)"
+                  compareColor="var(--ink-2)"
                   axisColor="var(--ink-3)"
                   gridColor="var(--border)"
                 />
@@ -327,35 +370,60 @@ export default function ReportsPage() {
           {fn.length > 0 && fn.some((s) => s.value > 0) && (
             <section className="report-page-break-before">
               <SectionHeader num="04" title="Funil de conversão" subtitle="Do impacto à ação" />
-              <div style={{ display: "grid", gap: 4, background: "var(--surface-2)", padding: 18, borderRadius: 12 }}>
-                {fn.map((s, i) => {
-                  const top = fn[0]?.value || 1;
-                  const pct = (s.value / top) * 100;
-                  return (
-                    <div key={s.key} style={{ display: "grid", gridTemplateColumns: "180px 1fr 120px", gap: 12, alignItems: "center", padding: "8px 0" }}>
-                      <div style={{ fontSize: 12, fontWeight: i === 0 ? 600 : 500, color: s.value > 0 ? "var(--ink)" : "var(--ink-4)" }}>
-                        {s.label}
-                      </div>
-                      <div style={{ height: 16, background: "var(--surface-3)", borderRadius: 3, overflow: "hidden" }}>
+              <div style={{ background: "var(--surface-2)", padding: 22, borderRadius: 12 }}>
+                <div style={{ display: "grid", gap: 6 }}>
+                  {fn.map((s, i) => {
+                    const top = fn[0]?.value || 1;
+                    const pct = (s.value / top) * 100;
+                    // % do estagio anterior. Acima de 100% indica mistura de fontes
+                    // (ex: compras canonical vem de manual_conversions, checkout vem
+                    // do pixel) — esconder pra nao confundir o cliente.
+                    const conv = s.conversion_from_prev;
+                    const showConv = conv != null && conv > 0 && conv <= 100;
+                    return (
+                      <div key={s.key} style={{ display: "grid", gridTemplateColumns: "180px 1fr 130px", gap: 14, alignItems: "center", padding: "6px 0" }}>
                         <div style={{
-                          width: `${Math.max(2, pct)}%`, height: "100%",
-                          background: i === 0 ? "var(--hero)" : "var(--chart-line)",
-                          opacity: 1 - i * 0.12,
-                        }} />
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <span className="mono" style={{ fontSize: 12, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-                          {fmtInt(s.value)}
-                        </span>
-                        {s.conversion_from_prev != null && s.conversion_from_prev > 0 && (
-                          <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: 6 }}>
-                            ({s.conversion_from_prev.toFixed(1)}%)
+                          fontSize: 12.5, fontWeight: i === 0 ? 600 : 500,
+                          color: s.value > 0 ? "var(--ink)" : "var(--ink-4)",
+                          letterSpacing: -0.1,
+                        }}>
+                          {s.label}
+                        </div>
+                        <div style={{ height: 14, background: "var(--surface-3)", borderRadius: 2, overflow: "hidden" }}>
+                          <div style={{
+                            width: `${Math.max(1.5, pct)}%`, height: "100%",
+                            background: "var(--hero)",
+                            // Opacity decai gradualmente do topo pro fundo do funil
+                            opacity: 1 - i * 0.13,
+                            transition: "width 300ms ease",
+                          }} />
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <span className="mono" style={{
+                            fontSize: 12.5, fontWeight: 600, fontVariantNumeric: "tabular-nums",
+                            color: s.value > 0 ? "var(--ink)" : "var(--ink-4)",
+                          }}>
+                            {fmtInt(s.value)}
                           </span>
-                        )}
+                          {showConv && (
+                            <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)", marginLeft: 6 }}>
+                              ({conv!.toFixed(1)}%)
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+                {/* Nota sobre fontes — transparencia profissional */}
+                <div style={{
+                  marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border)",
+                  fontSize: 10.5, color: "var(--ink-4)", lineHeight: 1.5,
+                  fontFamily: "var(--font-mono)", letterSpacing: 0.2,
+                }}>
+                  Topo do funil (impressões → checkout) via Meta pixel. Compras refletem
+                  vendas confirmadas via Trackcore + lançamentos manuais.
+                </div>
               </div>
             </section>
           )}
@@ -364,28 +432,76 @@ export default function ReportsPage() {
           {ov && (
             <section>
               <SectionHeader num="05" title="Apêndice" subtitle="Métricas técnicas complementares" />
-              <div style={{
-                display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 2,
-                background: "var(--border)", border: "1px solid var(--border)",
-                borderRadius: 10, overflow: "hidden",
-              }}>
-                <Tiny label="Impressões"  value={fmtIntCompact(ov.impressions)} />
-                <Tiny label="Alcance"     value={fmtIntCompact(ov.reach ?? 0)} />
-                <Tiny label="Cliques"     value={fmtIntCompact(ov.clicks)} />
-                <Tiny label="CTR médio"   value={fmtPct(ov.ctr)} hint="cliques ÷ impressões" />
-                <Tiny label="CPC médio"   value={fmtBRL(ov.cpc)} hint="custo por clique" />
-                <Tiny label="Frequência"  value="—" hint="média de vezes que cada pessoa viu o anúncio" />
+              <div style={{ display: "grid", gap: 18 }}>
+                {/* Cobertura — quanto e quem foi atingido */}
+                <div>
+                  <div className="mono" style={{
+                    fontSize: 9.5, color: "var(--ink-4)", letterSpacing: 1.4,
+                    textTransform: "uppercase", fontWeight: 600, marginBottom: 8,
+                  }}>
+                    Cobertura
+                  </div>
+                  <div style={{
+                    display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1,
+                    background: "var(--border)", border: "1px solid var(--border)",
+                    borderRadius: 10, overflow: "hidden",
+                  }}>
+                    <Tiny label="Impressões"  value={fmtIntCompact(ov.impressions)} hint="exibições do anúncio" />
+                    <Tiny label="Alcance"     value={fmtIntCompact(ov.reach ?? 0)} hint="pessoas únicas atingidas" />
+                    <Tiny label="Cliques"     value={fmtIntCompact(ov.clicks)} hint="cliques no link do anúncio" />
+                  </div>
+                </div>
+
+                {/* Performance — qualidade da entrega */}
+                <div>
+                  <div className="mono" style={{
+                    fontSize: 9.5, color: "var(--ink-4)", letterSpacing: 1.4,
+                    textTransform: "uppercase", fontWeight: 600, marginBottom: 8,
+                  }}>
+                    Performance
+                  </div>
+                  <div style={{
+                    display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 1,
+                    background: "var(--border)", border: "1px solid var(--border)",
+                    borderRadius: 10, overflow: "hidden",
+                  }}>
+                    <Tiny label="CTR médio"   value={fmtPct(ov.ctr)} hint="cliques ÷ impressões" />
+                    <Tiny label="CPC médio"   value={fmtBRL(ov.cpc)} hint="custo por clique" />
+                    <Tiny label="Frequência"  value="—" hint="vezes que cada pessoa viu" />
+                  </div>
+                </div>
               </div>
             </section>
           )}
 
           {/* ── RODAPÉ ─────────────────────────────────────────────── */}
-          <div style={{ borderTop: "1px solid var(--border)", paddingTop: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", letterSpacing: 0.5 }}>
-              NUX PULSE · {now.toISOString().slice(0, 10)}
+          <div style={{
+            marginTop: 8,
+            borderTop: "1px solid var(--border)",
+            paddingTop: 24,
+            display: "flex", justifyContent: "space-between", alignItems: "flex-end",
+            gap: 24, flexWrap: "wrap",
+          }}>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 8 }}>
+                <NuxBars size="sm" />
+                <span className="mono" style={{
+                  fontSize: 10.5, color: "var(--ink-2)", letterSpacing: "0.18em",
+                  textTransform: "uppercase", fontWeight: 700,
+                }}>
+                  NUX Pulse
+                </span>
+              </div>
+              <div className="mono" style={{ fontSize: 9.5, color: "var(--ink-4)", letterSpacing: 0.4 }}>
+                Performance · {now.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
+              </div>
             </div>
-            <div style={{ fontSize: 10, color: "var(--ink-4)", textAlign: "right", maxWidth: 340 }}>
-              Dados extraídos da Meta Marketing API. Eventual divergência com o Ads Manager pode ocorrer por atribuição e fuso horário da conta.
+            <div style={{
+              fontSize: 10, color: "var(--ink-4)", textAlign: "right",
+              maxWidth: 360, lineHeight: 1.55, fontStyle: "italic",
+            }}>
+              Dados extraídos da Meta Marketing API e do Trackcore. Eventual divergência
+              com o Ads Manager pode ocorrer por janela de atribuição e fuso horário da conta.
             </div>
           </div>
         </div>
@@ -575,26 +691,60 @@ export default function ReportsPage() {
 
 function SectionHeader({ num, title, subtitle }: { num: string; title: string; subtitle: string }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-        <span className="mono" style={{ fontSize: 10, color: "var(--ink-4)", letterSpacing: 1.2, fontWeight: 600 }}>
+    <div style={{ marginBottom: 22 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
+        <span className="mono" style={{
+          fontSize: 11, color: "var(--ink-4)", letterSpacing: 1.4,
+          fontWeight: 600, fontVariantNumeric: "tabular-nums",
+        }}>
           {num}
         </span>
-        <h2 style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.015em" }}>{title}</h2>
+        <h2 style={{
+          fontSize: 22, fontWeight: 700, letterSpacing: "-0.02em",
+          margin: 0, lineHeight: 1.15,
+        }}>
+          {title}
+        </h2>
       </div>
-      <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{subtitle}</div>
+      <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 4, paddingLeft: 28 }}>
+        {subtitle}
+      </div>
     </div>
   );
 }
 
 function SummaryBullet({ kind, title, body }: { kind: "pos" | "neg" | "warn" | "info"; title: string; body: string }) {
-  const borderColor = kind === "pos" ? "var(--pos)" : kind === "neg" ? "var(--neg)" : kind === "warn" ? "var(--warn)" : "var(--info)";
+  const accentColor =
+    kind === "pos" ? "var(--pos)" :
+    kind === "neg" ? "var(--neg)" :
+    kind === "warn" ? "var(--warn)" :
+    "var(--info)";
+  const label =
+    kind === "pos" ? "Positivo" :
+    kind === "neg" ? "Atenção" :
+    kind === "warn" ? "Observação" :
+    "Informativo";
   return (
     <div style={{
-      padding: "14px 18px", background: "var(--surface-2)", borderRadius: 8,
-      }}>
-      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 3 }}>{title}</div>
-      <div style={{ fontSize: 12, color: "var(--ink-3)", lineHeight: 1.5 }}>{body}</div>
+      display: "grid", gridTemplateColumns: "3px 1fr", gap: 16,
+      padding: "16px 18px 16px 14px",
+      background: "var(--surface-2)",
+      borderRadius: 8,
+      alignItems: "stretch",
+    }}>
+      <div style={{ background: accentColor, borderRadius: 999 }} />
+      <div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 4 }}>
+          <span className="mono" style={{
+            fontSize: 9, color: accentColor, letterSpacing: 1.2,
+            textTransform: "uppercase", fontWeight: 700,
+          }}>
+            {label}
+          </span>
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ink)" }}>{title}</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--ink-3)", lineHeight: 1.55 }}>{body}</div>
+      </div>
     </div>
   );
 }
@@ -605,22 +755,31 @@ function BigKpi({
   // delta > 0 é "bom" por padrão (mais conversões). Se `inverse`, ex: custo, inverte a cor.
   const deltaPositive = delta != null && ((delta > 0 && !inverse) || (delta < 0 && inverse));
   return (
-    <div style={{ padding: "18px 16px", background: "var(--surface-2)", borderRadius: 10 }}>
-      <div className="mono" style={{ fontSize: 10, color: "var(--ink-4)", letterSpacing: 0.8, textTransform: "uppercase", fontWeight: 600 }}>
+    <div style={{ padding: "20px 18px 18px", background: "var(--surface)" }}>
+      <div className="mono" style={{
+        fontSize: 9.5, color: "var(--ink-4)", letterSpacing: 1.1,
+        textTransform: "uppercase", fontWeight: 600,
+      }}>
         {label}
       </div>
-      <div style={{ fontSize: 26, fontWeight: 700, marginTop: 6, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+      <div style={{
+        fontSize: 30, fontWeight: 700, marginTop: 10,
+        letterSpacing: "-0.025em", fontVariantNumeric: "tabular-nums",
+        color: "var(--ink)", lineHeight: 1.05,
+      }}>
         {value}
       </div>
-      <div style={{ marginTop: 6, fontSize: 11, color: "var(--ink-3)", minHeight: 14 }}>
+      <div style={{ marginTop: 10, fontSize: 11, color: "var(--ink-3)", minHeight: 14 }}>
         {delta != null ? (
-          <span style={{ color: deltaPositive ? "var(--pos)" : "var(--neg)", fontWeight: 600 }}>
-            {delta > 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)}%
-          </span>
+          <>
+            <span style={{ color: deltaPositive ? "var(--pos)" : "var(--neg)", fontWeight: 600 }}>
+              {delta > 0 ? "↑" : "↓"} {Math.abs(delta).toFixed(1)}%
+            </span>
+            <span style={{ color: "var(--ink-4)", marginLeft: 6 }}>vs. anterior</span>
+          </>
         ) : (
-          <span style={{ color: "var(--ink-4)", fontStyle: "italic" }}>{hint ?? ""}</span>
+          <span style={{ color: "var(--ink-4)" }}>{hint ?? ""}</span>
         )}
-        {delta != null && <span style={{ color: "var(--ink-4)", marginLeft: 6 }}>vs. anterior</span>}
       </div>
     </div>
   );
