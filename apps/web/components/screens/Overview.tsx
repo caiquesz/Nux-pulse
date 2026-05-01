@@ -1,7 +1,7 @@
 "use client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { differenceInDays, format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
@@ -56,10 +56,18 @@ export function Overview() {
 
   const queryKeyBase = [slug, rangeOpts.since ?? "d", rangeOpts.until ?? rangeOpts.days];
 
+  // ─── Polling automatico ──────────────────────────────────────────────────
+  // refetchInterval: 60s — re-fetcha as queries da Meta no banco a cada minuto.
+  // refetchIntervalInBackground: false (default) — pausa quando aba escondida.
+  // refetchOnWindowFocus: true (default RQ) — refetch instant quando volta tab.
+  // Polling no FRONT so resolve metade — DB precisa estar fresco. Ver hot-sync
+  // auto-trigger logo abaixo.
+  const POLL_MS = 60_000;
   const overviewQ = useQuery<MetaOverview>({
     queryKey: ["meta", "overview", ...queryKeyBase],
     queryFn: () => metaOverview(slug, rangeOpts),
     enabled: !!slug,
+    refetchInterval: POLL_MS,
   });
 
   // Sync status + trigger
@@ -71,6 +79,9 @@ export function Overview() {
     refetchInterval: (q) => (q.state.data?.[0]?.status === "running" ? 3000 : false),
   });
   const running = jobsQ.data?.[0]?.status === "running";
+
+  // Backfill manual (botao Sincronizar) — sync completo do periodo atual.
+  // Pesado: days=N atual, level=ad (todos os niveis ate ad-creative).
   const backfillMut = useMutation({
     mutationFn: () => triggerMetaBackfill(slug, { days, level: "ad" }),
     onSuccess: () => {
@@ -82,15 +93,29 @@ export function Overview() {
       }, 5000);
     },
   });
+
+  // Hot-sync rapido — disparado automaticamente quando dado tah stale.
+  // days=2 (hoje + ontem), level=account (so a granularidade do overview,
+  // sem ad-level que e custoso). Tipicamente termina em 5-15s.
+  const hotSyncMut = useMutation({
+    mutationFn: () => triggerMetaBackfill(slug, { days: 2, level: "account" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sync-jobs", slug] });
+      setTimeout(() => qc.invalidateQueries({ queryKey: ["meta"] }), 4000);
+    },
+  });
+
   const campaignsQ = useQuery<MetaCampaignsResponse>({
     queryKey: ["meta", "campaigns", ...queryKeyBase],
     queryFn: () => metaCampaigns(slug, rangeOpts),
     enabled: !!slug,
+    refetchInterval: POLL_MS,
   });
   const dailyQ = useQuery<MetaDailyResponse>({
     queryKey: ["meta", "daily", ...queryKeyBase],
     queryFn: () => metaDaily(slug, rangeOpts),
     enabled: !!slug,
+    refetchInterval: POLL_MS,
   });
 
   // Compare period customizado — busca metricas no range escolhido pra usar
@@ -110,6 +135,7 @@ export function Overview() {
     queryKey: ["meta", "overview-compare", slug, customCompareOpts?.since, customCompareOpts?.until],
     queryFn: () => metaOverview(slug, customCompareOpts!),
     enabled: !!slug && !!customCompareOpts,
+    refetchInterval: POLL_MS,
   });
 
   // Daily series do periodo de comparacao — usado pra sparkline roxo nos
@@ -126,7 +152,58 @@ export function Overview() {
     queryKey: ["meta", "daily-compare", slug, compareDailyOpts?.since, compareDailyOpts?.until],
     queryFn: () => metaDaily(slug, compareDailyOpts!),
     enabled: !!slug && !!compareDailyOpts,
+    refetchInterval: POLL_MS,
   });
+
+  // ─── Auto hot-sync ao mount se dado stale ──────────────────────────────
+  // Logica:
+  // 1. So roda 1x por mount (autoSyncFiredRef previne re-trigger em re-render)
+  // 2. Pula se ja ha job running (evita corrida)
+  // 3. Pula se ultimo job foi error (nao ficar batendo num backend quebrado)
+  // 4. Dispara se ultimo job done > 30min ago, ou se nunca rodou pra esse slug
+  // O sync e leve (days=2, level=account) e resolve em ~10s.
+  const autoSyncFiredRef = useRef(false);
+  const lastJob = jobsQ.data?.[0];
+  const lastDoneAt = lastJob?.status === "done" && lastJob.finished_at
+    ? new Date(lastJob.finished_at).getTime()
+    : null;
+  const lastErrored = lastJob?.status === "error";
+  const STALE_MS = 30 * 60 * 1000; // 30min
+
+  useEffect(() => {
+    if (!slug) return;
+    if (autoSyncFiredRef.current) return;
+    if (jobsQ.isLoading) return; // espera saber se tem job recente
+    if (running) return; // ja sincronizando
+    if (hotSyncMut.isPending || backfillMut.isPending) return;
+    if (lastErrored) return; // nao auto-recuperar de erro
+
+    const stale = lastDoneAt == null || (Date.now() - lastDoneAt) > STALE_MS;
+    if (!stale) return;
+
+    autoSyncFiredRef.current = true;
+    hotSyncMut.mutate();
+  }, [slug, jobsQ.isLoading, running, lastDoneAt, lastErrored]);
+
+  // Format "atualizado ha Xm" pra header. Usa lastDoneAt; ticka cada 30s
+  // pra label nao ficar travado em "ha 1m" eternamente.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+  const lastSyncLabel = useMemo(() => {
+    if (running) return "sincronizando…";
+    if (!lastDoneAt) return "nunca sincronizado";
+    const ageSec = Math.floor((Date.now() - lastDoneAt) / 1000);
+    if (ageSec < 60) return "agora há pouco";
+    const ageMin = Math.floor(ageSec / 60);
+    if (ageMin < 60) return `há ${ageMin}min`;
+    const ageHr = Math.floor(ageMin / 60);
+    if (ageHr < 24) return `há ${ageHr}h`;
+    const ageDays = Math.floor(ageHr / 24);
+    return `há ${ageDays}d`;
+  }, [lastDoneAt, running]);
 
   // Funil — stages derivadas direto do MetaOverview. 6 etapas:
   // Investimento, Impressoes, Alcance, Mensagens, Leads, Compras.
@@ -226,14 +303,30 @@ export function Overview() {
             ))}
           </div>
           <DateRangePicker value={custom} onChange={setCustom} />
+          {/* Indicador de freshness — passa o mouse pro tooltip detalhado */}
+          <div
+            className="sync-indicator"
+            title={
+              running
+                ? "Sincronização em andamento — Meta API"
+                : lastDoneAt
+                  ? `Última sync: ${new Date(lastDoneAt).toLocaleString("pt-BR")}\nAuto-refresh: dado polled a cada 60s`
+                  : "Nenhuma sincronização registrada — clique em Sincronizar"
+            }
+          >
+            <span className={`sync-dot ${running ? "syncing" : lastErrored ? "err" : "ok"}`} />
+            <span className="sync-label">{lastSyncLabel}</span>
+          </div>
           <button
             className="btn ghost"
             onClick={() => backfillMut.mutate()}
-            disabled={running || backfillMut.isPending}
+            disabled={running || backfillMut.isPending || hotSyncMut.isPending}
             title={running ? "Sincronização em andamento…" : `Sincronizar últimos ${days} dias da Meta`}
           >
             <Icon name="refresh" size={12} />
-            {running ? "Sincronizando…" : backfillMut.isPending ? "Enviando…" : "Sincronizar"}
+            {running
+              ? "Sincronizando…"
+              : (backfillMut.isPending || hotSyncMut.isPending) ? "Enviando…" : "Sincronizar"}
           </button>
           <button className="btn ghost">
             <Icon name="export" size={12} />
