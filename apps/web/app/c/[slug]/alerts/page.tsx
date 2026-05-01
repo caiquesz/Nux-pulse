@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 
 import { metaAlerts } from "@/lib/api";
+import { POLL_MS } from "@/lib/useAutoSync";
 
 const KIND_LABELS: Record<string, string> = {
   fatigue: "Fadiga criativa",
@@ -19,7 +20,7 @@ export default function AlertsPage() {
     queryKey: ["meta-alerts", slug],
     queryFn: () => metaAlerts(slug),
     enabled: !!slug,
-    refetchInterval: 60_000,
+    refetchInterval: POLL_MS,
   });
 
   const alerts = q.data?.alerts ?? [];

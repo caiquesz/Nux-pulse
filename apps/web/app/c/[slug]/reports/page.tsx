@@ -5,22 +5,25 @@ import { useParams } from "next/navigation";
 
 import { BigChart } from "@/components/primitives/BigChart";
 import { NuxBars } from "@/components/icons/Icon";
+import { SyncIndicator } from "@/components/SyncIndicator";
 import {
   getClient, metaAlerts, metaCampaigns, metaDaily, metaFunnel, metaOverview,
 } from "@/lib/api";
 import { fmtBRL, fmtInt, fmtIntCompact, fmtPct } from "@/lib/fmt";
+import { POLL_MS, useAutoSync } from "@/lib/useAutoSync";
 
 export default function ReportsPage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
   const [days, setDays] = useState<number>(30);
+  const sync = useAutoSync(slug);
 
   const client   = useQuery({ queryKey: ["client", slug],           queryFn: () => getClient(slug),           enabled: !!slug });
-  const overview = useQuery({ queryKey: ["report-ov", slug, days],  queryFn: () => metaOverview(slug, { days }),  enabled: !!slug });
-  const daily    = useQuery({ queryKey: ["report-dy", slug, days],  queryFn: () => metaDaily(slug, { days }),     enabled: !!slug });
-  const campaigns= useQuery({ queryKey: ["report-cp", slug, days],  queryFn: () => metaCampaigns(slug, { days }), enabled: !!slug });
-  const funnel   = useQuery({ queryKey: ["report-fn", slug, days],  queryFn: () => metaFunnel(slug, { days }),    enabled: !!slug });
-  const alerts   = useQuery({ queryKey: ["report-al", slug],        queryFn: () => metaAlerts(slug),              enabled: !!slug });
+  const overview = useQuery({ queryKey: ["report-ov", slug, days],  queryFn: () => metaOverview(slug, { days }),  enabled: !!slug, refetchInterval: POLL_MS });
+  const daily    = useQuery({ queryKey: ["report-dy", slug, days],  queryFn: () => metaDaily(slug, { days }),     enabled: !!slug, refetchInterval: POLL_MS });
+  const campaigns= useQuery({ queryKey: ["report-cp", slug, days],  queryFn: () => metaCampaigns(slug, { days }), enabled: !!slug, refetchInterval: POLL_MS });
+  const funnel   = useQuery({ queryKey: ["report-fn", slug, days],  queryFn: () => metaFunnel(slug, { days }),    enabled: !!slug, refetchInterval: POLL_MS });
+  const alerts   = useQuery({ queryKey: ["report-al", slug],        queryFn: () => metaAlerts(slug),              enabled: !!slug, refetchInterval: POLL_MS });
 
   const now = new Date();
   const ov = overview.data;
@@ -75,6 +78,11 @@ export default function ReportsPage() {
           <div className="sub">Documento pronto pra enviar ao cliente · Ctrl+P exporta PDF</div>
         </div>
         <div className="page-head-actions">
+          <SyncIndicator
+            label={sync.lastSyncLabel}
+            status={sync.lastSyncStatus}
+            lastDoneAt={sync.lastDoneAt}
+          />
           <div className="seg">
             {[7, 30, 90].map((d) => (
               <button key={d} className={days === d ? "on" : ""} onClick={() => setDays(d)}>{d}D</button>

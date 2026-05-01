@@ -3,18 +3,22 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { SyncIndicator } from "@/components/SyncIndicator";
 import { metaFunnel } from "@/lib/api";
 import { fmtInt, fmtPct, fmtPctAdaptive } from "@/lib/fmt";
+import { POLL_MS, useAutoSync } from "@/lib/useAutoSync";
 
 export default function FunnelPage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
   const [days, setDays] = useState<number>(30);
+  const sync = useAutoSync(slug);
 
   const q = useQuery({
     queryKey: ["meta-funnel", slug, days],
     queryFn: () => metaFunnel(slug, { days }),
     enabled: !!slug,
+    refetchInterval: POLL_MS,
   });
 
   const stages = q.data?.stages ?? [];
@@ -37,6 +41,11 @@ export default function FunnelPage() {
           <div className="sub">Impressão → Clique → LP → Carrinho → Checkout → Compra · {days} dias</div>
         </div>
         <div className="page-head-actions">
+          <SyncIndicator
+            label={sync.lastSyncLabel}
+            status={sync.lastSyncStatus}
+            lastDoneAt={sync.lastDoneAt}
+          />
           <div className="seg">
             {[7, 30, 90].map((d) => (
               <button key={d} className={days === d ? "on" : ""} onClick={() => setDays(d)}>{d}D</button>

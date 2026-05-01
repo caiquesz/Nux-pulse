@@ -5,6 +5,7 @@ import { useMemo } from "react";
 
 import { getClient, metaDaily } from "@/lib/api";
 import { fmtBRL, fmtInt } from "@/lib/fmt";
+import { POLL_MS } from "@/lib/useAutoSync";
 
 export default function ForecastPage() {
   const params = useParams<{ slug: string }>();
@@ -16,6 +17,7 @@ export default function ForecastPage() {
     queryKey: ["forecast-daily", slug, 30],
     queryFn: () => metaDaily(slug, { days: 30 }),
     enabled: !!slug,
+    refetchInterval: POLL_MS,
   });
 
   const stats = useMemo(() => {

@@ -3,18 +3,22 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { SyncIndicator } from "@/components/SyncIndicator";
 import { metaAudience, type BreakdownRow } from "@/lib/api";
 import { fmtBRL, fmtIntCompact, fmtPct } from "@/lib/fmt";
+import { POLL_MS, useAutoSync } from "@/lib/useAutoSync";
 
 export default function AudiencePage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
   const [days, setDays] = useState<number>(30);
+  const sync = useAutoSync(slug);
 
   const q = useQuery({
     queryKey: ["meta-audience", slug, days],
     queryFn: () => metaAudience(slug, { days }),
     enabled: !!slug,
+    refetchInterval: POLL_MS,
   });
 
   const empty = !q.isLoading && (q.data?.by_age.length ?? 0) + (q.data?.by_gender.length ?? 0) === 0;
@@ -28,6 +32,11 @@ export default function AudiencePage() {
           <div className="sub">Demografia · idade × gênero · {days} dias</div>
         </div>
         <div className="page-head-actions">
+          <SyncIndicator
+            label={sync.lastSyncLabel}
+            status={sync.lastSyncStatus}
+            lastDoneAt={sync.lastDoneAt}
+          />
           <div className="seg">
             {[7, 30, 90].map((d) => (
               <button key={d} className={days === d ? "on" : ""} onClick={() => setDays(d)}>{d}D</button>

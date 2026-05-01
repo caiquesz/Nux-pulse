@@ -3,8 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { SyncIndicator } from "@/components/SyncIndicator";
 import { metaAds, metaAdsets, metaCampaigns } from "@/lib/api";
 import { fmtBRL, fmtIntCompact, fmtPct } from "@/lib/fmt";
+import { POLL_MS, useAutoSync } from "@/lib/useAutoSync";
 
 type Tab = "campaigns" | "adsets" | "ads";
 
@@ -15,21 +17,25 @@ export default function MetaPage() {
   const [days, setDays] = useState<number>(30);
   const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
   const [adsetFilter, setAdsetFilter] = useState<string | null>(null);
+  const sync = useAutoSync(slug);
 
   const campaigns = useQuery({
     queryKey: ["meta-campaigns-list", slug, days],
     queryFn: () => metaCampaigns(slug, { days }),
     enabled: !!slug,
+    refetchInterval: POLL_MS,
   });
   const adsets = useQuery({
     queryKey: ["meta-adsets-list", slug, days, campaignFilter],
     queryFn: () => metaAdsets(slug, { days, campaign_id: campaignFilter ?? undefined }),
     enabled: !!slug && tab === "adsets",
+    refetchInterval: POLL_MS,
   });
   const ads = useQuery({
     queryKey: ["meta-ads-list", slug, days, campaignFilter, adsetFilter],
     queryFn: () => metaAds(slug, { days, campaign_id: campaignFilter ?? undefined, adset_id: adsetFilter ?? undefined, limit: 200 }),
     enabled: !!slug && tab === "ads",
+    refetchInterval: POLL_MS,
   });
 
   const subLabel = campaignFilter
@@ -47,6 +53,11 @@ export default function MetaPage() {
           </div>
         </div>
         <div className="page-head-actions">
+          <SyncIndicator
+            label={sync.lastSyncLabel}
+            status={sync.lastSyncStatus}
+            lastDoneAt={sync.lastDoneAt}
+          />
           <div className="seg">
             {[7, 30, 90].map((d) => (
               <button key={d} className={days === d ? "on" : ""} onClick={() => setDays(d)}>

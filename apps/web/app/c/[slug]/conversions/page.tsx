@@ -3,11 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { SyncIndicator } from "@/components/SyncIndicator";
 import {
   createManualConversion, deleteManualConversion, listManualConversions,
   listTeam, updateManualConversion,
   type ConvKind, type ManualConversion, type ManualConversionCreatePayload,
 } from "@/lib/api";
+import { useAutoSync } from "@/lib/useAutoSync";
 
 // Cores vibrantes e modernas — verde lima, cobalt electric, citrus
 // (mesma paleta accent usada em hero banners e highlights)
@@ -85,6 +87,7 @@ export default function ConversionsPage() {
   const [filter, setFilter] = useState<ConvKind | "all">("all");
   const [editing, setEditing] = useState<ManualConversion | null>(null);
   const [creating, setCreating] = useState(false);
+  const sync = useAutoSync(slug);
 
   const listQ = useQuery({
     queryKey: ["manual-conv", slug, filter],
@@ -148,6 +151,11 @@ export default function ConversionsPage() {
           </div>
         </div>
         <div className="page-head-actions">
+          <SyncIndicator
+            label={sync.lastSyncLabel}
+            status={sync.lastSyncStatus}
+            lastDoneAt={sync.lastDoneAt}
+          />
           <button className="btn" onClick={() => setCreating(true)}>+ Nova conversão</button>
         </div>
       </div>

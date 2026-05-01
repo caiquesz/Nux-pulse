@@ -619,6 +619,10 @@ button {
 .sync-dot.err {
   background: var(--neg);
 }
+.sync-dot.never {
+  background: var(--ink-3);
+  opacity: 0.6;
+}
 @keyframes sync-dot-pulse {
   0%, 100% { box-shadow: 0 0 0 0 currentColor; }
   50%      { box-shadow: 0 0 0 5px transparent; }

@@ -3,19 +3,23 @@ import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 
+import { SyncIndicator } from "@/components/SyncIndicator";
 import { metaCreatives } from "@/lib/api";
 import { fmtBRL, fmtIntCompact, fmtPct } from "@/lib/fmt";
+import { POLL_MS, useAutoSync } from "@/lib/useAutoSync";
 
 export default function CreativesPage() {
   const params = useParams<{ slug: string }>();
   const slug = params?.slug ?? "";
   const [days, setDays] = useState<number>(30);
   const [filter, setFilter] = useState<"all" | "with-spend">("with-spend");
+  const sync = useAutoSync(slug);
 
   const q = useQuery({
     queryKey: ["meta-creatives", slug, days],
     queryFn: () => metaCreatives(slug, { days, limit: 120 }),
     enabled: !!slug,
+    refetchInterval: POLL_MS,
   });
 
   const creatives = (q.data?.creatives ?? []).filter((c) =>
@@ -33,6 +37,11 @@ export default function CreativesPage() {
           </div>
         </div>
         <div className="page-head-actions">
+          <SyncIndicator
+            label={sync.lastSyncLabel}
+            status={sync.lastSyncStatus}
+            lastDoneAt={sync.lastDoneAt}
+          />
           <div className="seg">
             {[7, 30, 90].map((d) => (
               <button key={d} className={days === d ? "on" : ""} onClick={() => setDays(d)}>{d}D</button>
