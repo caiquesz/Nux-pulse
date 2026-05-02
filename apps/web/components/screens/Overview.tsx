@@ -265,7 +265,10 @@ export function Overview() {
         <div className="rule" />
       </div>
 
-      <div className="grid-kpi" style={{ marginBottom: 36 }}>
+      {/* key bumpa quando troca periodo — forca remount, anima de novo o stagger.
+          Sem isso, CSS animation so roda no mount inicial e period changes
+          sao silenciosos. */}
+      <div key={`kpi-${queryKeyBase.join("-")}`} className="grid-kpi" style={{ marginBottom: 36 }}>
         {kpis.map((k) => (
           <div key={k.label} className="card">
             <div className="stat">
@@ -276,7 +279,7 @@ export function Overview() {
               <span className="stat-value">
                 {loading || k.numericValue == null
                   ? k.value
-                  : <AnimatedNumber value={k.numericValue} format={k.format} skipInitial />}
+                  : <AnimatedNumber value={k.numericValue} format={k.format} duration={1.0} />}
               </span>
               {k.series.length > 1 && (
                 <div className="stat-spark">
@@ -422,7 +425,10 @@ export function Overview() {
 
         <div style={{ marginTop: 16, position: "relative", zIndex: 1 }}>
           {series.length > 1 ? (
+            // key bumpa no period change → BigChart remonta → wipe-from-left
+            // anima de novo. Critico pra usuario sentir a transicao 7d↔30d↔90d.
             <BigChart
+              key={`chart-${queryKeyBase.join("-")}`}
               series={series}
               extras={extras}
               labels={dateLabels}
