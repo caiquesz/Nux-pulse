@@ -265,23 +265,29 @@ export function Overview() {
         <div className="rule" />
       </div>
 
-      {/* SEM key forcado — antes usava key={kpi-...} pra remontar a grid e
-          re-triggar stagger no period change. Causava CLS alto (~0.12 por
-          troca) porque cards desapareciam temporariamente. Agora o feedback
-          de period change vem via:
-          1. count-up dos numeros (AnimatedNumber detecta value change)
-          2. delta-flash chip pulsando
-          3. sparklines morphendo via MorphablePath (path interpola suave) */}
+      {/* Conditional render: nao monta o grid-kpi enquanto data nao chegou.
+          Antes renderizava cards com "—" durante loading + CSS stagger
+          rolando, depois data chegava e count-up entrava SEPARADAMENTE —
+          parecia 2 animacoes (cards vazios → pausa → numeros aparecem).
+          Agora: durante loading, skeleton placeholder reserva o espaço.
+          Quando data carrega, grid-kpi monta UMA vez → CSS stagger +
+          AnimatedNumber count-up rolam JUNTOS = uma animacao coerente.
+
+          Anti-CLS: skeleton tem mesma altura que o grid (480px) pra nao ter
+          layout shift no momento da transicao. */}
+      {loading ? (
+        <div className="grid-kpi-skeleton" style={{ marginBottom: 36, minHeight: 480 }} aria-busy="true" />
+      ) : (
       <div className="grid-kpi" style={{ marginBottom: 36 }}>
         {kpis.map((k) => (
           <div key={k.label} className="card">
             <div className="stat">
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
                 <span className="stat-label">{k.label}</span>
-                {!loading && <DeltaChip delta={k.delta} semantic={k.deltaSemantic} />}
+                <DeltaChip delta={k.delta} semantic={k.deltaSemantic} />
               </div>
               <span className="stat-value">
-                {loading || k.numericValue == null
+                {k.numericValue == null
                   ? k.value
                   : <AnimatedNumber value={k.numericValue} format={k.format} duration={0.7} />}
               </span>
@@ -299,6 +305,7 @@ export function Overview() {
           </div>
         ))}
       </div>
+      )}
 
       {/* SEÇÃO 02 — Período de comparação (anterior).
           Grid espelha layout da seção 01 mas em treatment muted: cards menores,

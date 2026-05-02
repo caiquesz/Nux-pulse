@@ -1899,6 +1899,33 @@ code, pre, kbd, samp {
   from { opacity: 0; transform: translateY(24px) scale(0.94); }
   to   { opacity: 1; transform: translateY(0)    scale(1); }
 }
+
+/* ─── KPI grid skeleton — placeholder durante loading ────────────────────────
+   Reserva espaço (mesma altura que o grid renderizado) pra nao causar layout
+   shift quando data carrega e cards aparecem. Shimmer sutil sinaliza "carregando"
+   sem distrair. Quando data chega, esse div some e grid-kpi entra com stagger
+   coreografado — UMA animacao coerente, nao 2 separadas. */
+.grid-kpi-skeleton {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--surface-2) 30%,
+    var(--surface-2) 70%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-position: -100% 0;
+  animation: kpiSkeletonShimmer 1800ms ease-in-out infinite;
+  border-radius: 12px;
+  opacity: 0.18;
+}
+@keyframes kpiSkeletonShimmer {
+  0%   { background-position: -100% 0; }
+  100% { background-position: 100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .grid-kpi-skeleton { animation: none; opacity: 0.12; }
+}
 .grid-kpi > .card {
   opacity: 0;
   /* Duration 600ms (era 720) — combinada com stagger 55ms entre cards termina
