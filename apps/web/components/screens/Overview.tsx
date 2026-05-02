@@ -265,10 +265,14 @@ export function Overview() {
         <div className="rule" />
       </div>
 
-      {/* key bumpa quando troca periodo — forca remount, anima de novo o stagger.
-          Sem isso, CSS animation so roda no mount inicial e period changes
-          sao silenciosos. */}
-      <div key={`kpi-${queryKeyBase.join("-")}`} className="grid-kpi" style={{ marginBottom: 36 }}>
+      {/* SEM key forcado — antes usava key={kpi-...} pra remontar a grid e
+          re-triggar stagger no period change. Causava CLS alto (~0.12 por
+          troca) porque cards desapareciam temporariamente. Agora o feedback
+          de period change vem via:
+          1. count-up dos numeros (AnimatedNumber detecta value change)
+          2. delta-flash chip pulsando
+          3. sparklines morphendo via MorphablePath (path interpola suave) */}
+      <div className="grid-kpi" style={{ marginBottom: 36 }}>
         {kpis.map((k) => (
           <div key={k.label} className="card">
             <div className="stat">
