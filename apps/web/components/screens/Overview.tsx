@@ -1,10 +1,11 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { differenceInDays, format } from "date-fns";
 import type { DateRange } from "react-day-picker";
 
+import { AnimatedNumber } from "@/components/primitives/AnimatedNumber";
 import { BigChart } from "@/components/primitives/BigChart";
 import { DataIntegrityBanner } from "@/components/DataIntegrityBanner";
 import { Delta } from "@/components/primitives/Delta";
@@ -272,7 +273,11 @@ export function Overview() {
                 <span className="stat-label">{k.label}</span>
                 {!loading && <DeltaChip delta={k.delta} semantic={k.deltaSemantic} />}
               </div>
-              <span className="stat-value">{loading ? "—" : k.value}</span>
+              <span className="stat-value">
+                {loading || k.numericValue == null
+                  ? k.value
+                  : <AnimatedNumber value={k.numericValue} format={k.format} skipInitial />}
+              </span>
               {k.series.length > 1 && (
                 <div className="stat-spark">
                   <Sparkline
@@ -502,6 +507,9 @@ type DeltaSemantic = "up_better" | "up_worse" | "neutral";
 type Kpi = {
   label: string;
   value: string;
+  /** Valor numerico raw — quando presente, JSX usa <AnimatedNumber> e tweena
+   *  entre updates do polling. Null quando nao ha dado (mostra "—" estatico). */
+  numericValue: number | null;
   /** Valor do periodo de comparacao formatado (mesmo formato que value). */
   prevValue: string;
   /** Serie diaria do periodo de comparacao (pra sparkline roxo nos compare cards). */
@@ -531,18 +539,18 @@ function buildKpis(
   const dash = "—";
   if (!o) {
     return [
-      { label: "Investimento", value: dash, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "neutral", series: emptySeries, format: fmtBRL },
-      { label: "CPL",          value: dash, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "up_worse", series: emptySeries, format: fmtBRL },
-      { label: "Custo por mensagem", value: dash, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "up_worse", series: emptySeries, format: fmtBRL },
-      { label: "CAC",          value: dash, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "up_worse", series: emptySeries, format: fmtBRL },
-      { label: "Mensagens",    value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
-      { label: "Leads",        value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
-      { label: "Vendas",       value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
-      { label: "Faturamento",  value: dash, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "up_better", series: emptySeries, format: fmtBRL },
-      { label: "ROAS",         value: dash, prevValue: dash, prevSeries: emptySeries, unit: "x",   delta: null, deltaSemantic: "up_better", series: emptySeries, format: (v) => v.toFixed(2) + "x" },
-      { label: "Impressões",   value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
-      { label: "Cliques",      value: dash, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
-      { label: "CTR",          value: dash, prevValue: dash, prevSeries: emptySeries, unit: "%",   delta: null, deltaSemantic: "up_better", series: emptySeries, format: (v) => fmtPct(v) },
+      { label: "Investimento", value: dash, numericValue: null, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "neutral", series: emptySeries, format: fmtBRL },
+      { label: "CPL",          value: dash, numericValue: null, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "up_worse", series: emptySeries, format: fmtBRL },
+      { label: "Custo por mensagem", value: dash, numericValue: null, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "up_worse", series: emptySeries, format: fmtBRL },
+      { label: "CAC",          value: dash, numericValue: null, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "up_worse", series: emptySeries, format: fmtBRL },
+      { label: "Mensagens",    value: dash, numericValue: null, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "Leads",        value: dash, numericValue: null, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "Vendas",       value: dash, numericValue: null, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "Faturamento",  value: dash, numericValue: null, prevValue: dash, prevSeries: emptySeries, unit: "BRL", delta: null, deltaSemantic: "up_better", series: emptySeries, format: fmtBRL },
+      { label: "ROAS",         value: dash, numericValue: null, prevValue: dash, prevSeries: emptySeries, unit: "x",   delta: null, deltaSemantic: "up_better", series: emptySeries, format: (v) => v.toFixed(2) + "x" },
+      { label: "Impressões",   value: dash, numericValue: null, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "Cliques",      value: dash, numericValue: null, prevValue: dash, prevSeries: emptySeries, unit: "",    delta: null, deltaSemantic: "up_better", series: emptySeries, format: noFmt },
+      { label: "CTR",          value: dash, numericValue: null, prevValue: dash, prevSeries: emptySeries, unit: "%",   delta: null, deltaSemantic: "up_better", series: emptySeries, format: (v) => fmtPct(v) },
     ];
   }
 
@@ -656,6 +664,7 @@ function buildKpis(
     {
       label: "Investimento",
       value: fmtBRL(o.spend),
+      numericValue: o.spend,
       prevValue: fmtBRL(prev.spend),
       prevSeries: prevSpendSeries,
       unit: "BRL",
@@ -667,6 +676,7 @@ function buildKpis(
     {
       label: "CPL",
       value: o.leads > 0 ? fmtBRL(o.cost_per_lead) : "—",
+      numericValue: o.leads > 0 ? o.cost_per_lead : null,
       prevValue: prev.leads > 0 ? fmtBRL(prev.cost_per_lead) : "—",
       prevSeries: prevCplSeries,
       unit: "BRL",
@@ -678,6 +688,7 @@ function buildKpis(
     {
       label: "Custo por mensagem",
       value: o.messages > 0 ? fmtBRL(o.cost_per_message) : "—",
+      numericValue: o.messages > 0 ? o.cost_per_message : null,
       prevValue: prev.messages > 0 ? fmtBRL(prev.cost_per_message) : "—",
       prevSeries: prevCpmSeries,
       unit: "BRL",
@@ -689,6 +700,7 @@ function buildKpis(
     {
       label: "CAC",
       value: effectivePurchases > 0 ? fmtBRL(effectiveCpp) : "—",
+      numericValue: effectivePurchases > 0 ? effectiveCpp : null,
       prevValue: prev.purchases > 0 ? fmtBRL(prev.cost_per_purchase) : "—",
       prevSeries: prevCacSeries,
       unit: "BRL",
@@ -700,6 +712,7 @@ function buildKpis(
     {
       label: o.messages > 0 ? `Mensagens · R$${o.cost_per_message.toFixed(2)}/msg` : "Mensagens",
       value: fmtIntCompact(o.messages),
+      numericValue: o.messages,
       prevValue: fmtIntCompact(prev.messages),
       prevSeries: prevMsgSeries,
       unit: "",
@@ -711,6 +724,7 @@ function buildKpis(
     {
       label: o.leads > 0 ? `Leads · R$${o.cost_per_lead.toFixed(2)}/lead` : "Leads",
       value: fmtIntCompact(o.leads),
+      numericValue: o.leads,
       prevValue: fmtIntCompact(prev.leads),
       prevSeries: prevLeadSeries,
       unit: "",
@@ -726,6 +740,7 @@ function buildKpis(
             : `Vendas · R$${effectiveCpp.toFixed(2)}/venda`)
         : (usingTrackcoreSales ? "Vendas · via Trackcore" : "Vendas"),
       value: fmtIntCompact(effectivePurchases),
+      numericValue: effectivePurchases,
       prevValue: fmtIntCompact(prevEffectivePurchases),
       prevSeries: prevPurchaseSeries,
       unit: "",
@@ -737,6 +752,7 @@ function buildKpis(
     {
       label: usingTrackcoreRevenue ? "Faturamento · via Trackcore" : "Faturamento",
       value: effectiveRevenue > 0 ? fmtBRL(effectiveRevenue) : "—",
+      numericValue: effectiveRevenue > 0 ? effectiveRevenue : null,
       prevValue: prevEffectiveRevenue > 0 ? fmtBRL(prevEffectiveRevenue) : "—",
       prevSeries: prevRevenueSeries,
       unit: "BRL",
@@ -748,6 +764,7 @@ function buildKpis(
     {
       label: usingTrackcoreRevenue ? "ROAS · via Trackcore" : "ROAS",
       value: roasLabel,
+      numericValue: effectiveRoas > 0 ? effectiveRoas : null,
       prevValue: prevEffectiveRoas > 0 ? `${prevEffectiveRoas.toFixed(2)}x` : "—",
       prevSeries: prevRoasSeries,
       unit: "x",
@@ -759,6 +776,7 @@ function buildKpis(
     {
       label: "Impressões",
       value: fmtIntCompact(o.impressions),
+      numericValue: o.impressions,
       prevValue: fmtIntCompact(prev.impressions),
       prevSeries: prevImpSeries,
       unit: "",
@@ -770,6 +788,7 @@ function buildKpis(
     {
       label: "Cliques",
       value: fmtIntCompact(o.clicks),
+      numericValue: o.clicks,
       prevValue: fmtIntCompact(prev.clicks),
       prevSeries: prevClkSeries,
       unit: "",
@@ -781,6 +800,7 @@ function buildKpis(
     {
       label: "CTR",
       value: fmtPct(o.ctr),
+      numericValue: o.ctr,
       prevValue: fmtPct(prev.ctr),
       prevSeries: prevCtrSeries,
       unit: "%",
@@ -814,6 +834,22 @@ function formatRangeBr(since: string, until: string): string {
  *  - neutral:   ambiguo (investimento) → cinza sempre
  *  delta=null (ex: prev=0) → mostra "—" cinza */
 function DeltaChip({ delta, semantic }: { delta: number | null; semantic: DeltaSemantic }) {
+  // Detecta mudanca real no delta entre renders pra trigger flash. Skip o
+  // primeiro mount (evita flash inutil). Usa key bump pra re-iniciar a animacao
+  // CSS — sem isso, mesma classe nao re-anima.
+  const prevDelta = useRef<number | null | undefined>(undefined);
+  const [flashKey, setFlashKey] = useState(0);
+  useEffect(() => {
+    if (prevDelta.current === undefined) {
+      prevDelta.current = delta;
+      return;
+    }
+    if (prevDelta.current !== delta) {
+      prevDelta.current = delta;
+      setFlashKey((k) => k + 1);
+    }
+  }, [delta]);
+
   if (delta === null || !Number.isFinite(delta)) {
     return (
       <span className="mono" style={{
@@ -845,14 +881,18 @@ function DeltaChip({ delta, semantic }: { delta: number | null; semantic: DeltaS
   const arrow = isFlat ? "→" : isPositive ? "↗" : "↘";
 
   return (
-    <span className="mono" style={{
-      display: "inline-flex", alignItems: "center", gap: 2,
-      fontSize: 10, fontWeight: 600, letterSpacing: 0.2,
-      padding: "2px 6px", borderRadius: 4,
-      color, background: bg,
-      whiteSpace: "nowrap",
-      flexShrink: 0,
-    }}>
+    <span
+      key={flashKey}
+      className={`mono ${flashKey > 0 ? "delta-flash" : ""}`}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 2,
+        fontSize: 10, fontWeight: 600, letterSpacing: 0.2,
+        padding: "2px 6px", borderRadius: 4,
+        color, background: bg,
+        whiteSpace: "nowrap",
+        flexShrink: 0,
+      }}
+    >
       <span aria-hidden style={{ fontSize: 10, lineHeight: 1 }}>{arrow}</span>
       {sign}{pct}%
     </span>

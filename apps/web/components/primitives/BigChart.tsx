@@ -1,4 +1,5 @@
 "use client";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { seriesToPath, seriesToBars, formatShort } from "@/lib/chart-utils";
 
@@ -173,14 +174,28 @@ export function BigChart({
 
         {style === "bar" ? (
           barData.map((b, i) => (
-            <rect key={i} x={padL + b.x} y={padT + b.y} width={b.w} height={b.h}
-                  fill={lineColor} opacity={hover?.idx === i ? 1 : 0.82} rx={1.5} />
+            // Stagger reveal das barras — escala vertical desde a base. Total <650ms.
+            <rect
+              key={i}
+              x={padL + b.x}
+              y={padT + b.y}
+              width={b.w}
+              height={b.h}
+              fill={lineColor}
+              opacity={hover?.idx === i ? 1 : 0.82}
+              rx={1.5}
+              className="bigchart-bar-rise"
+              style={{ transformOrigin: `${padL + b.x + b.w / 2}px ${padT + plotH}px`, animationDelay: `${i * 18}ms` }}
+            />
           ))
         ) : (
           <>
-            {style !== "line" && <path d={area} fill={`url(#${fillGradId})`} />}
+            {style !== "line" && (
+              <path d={area} fill={`url(#${fillGradId})`} className="bigchart-area-fade" />
+            )}
             {/* Extras (multi-line) renderizadas SOLIDAS com cores proprias.
-                Layer abaixo da linha primaria pra primaria continuar dominante. */}
+                Layer abaixo da linha primaria pra primaria continuar dominante.
+                Stagger via animationDelay indexado — primaria desenha primeiro. */}
             {extraPaths.map((e, i) => (
               <path
                 key={`extra-${i}`}
@@ -191,14 +206,25 @@ export function BigChart({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 opacity={0.92}
+                className="bigchart-line-draw"
+                style={{ animationDelay: `${(i + 1) * 120}ms` }}
               />
             ))}
             {/* compare legacy — agora SOLIDO (era tracejado). Recomenda-se migrar pra extras. */}
             {cmpPath && (
               <path d={cmpPath.line} fill="none" stroke={compareColor} strokeWidth={1.75}
-                    strokeLinecap="round" strokeLinejoin="round" opacity={0.92} />
+                    strokeLinecap="round" strokeLinejoin="round" opacity={0.92}
+                    className="bigchart-line-draw" style={{ animationDelay: "120ms" }} />
             )}
-            <path d={line} fill="none" stroke={`url(#${lineGradId})`} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d={line}
+              fill="none"
+              stroke={`url(#${lineGradId})`}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="bigchart-line-draw"
+            />
           </>
         )}
 
@@ -210,14 +236,22 @@ export function BigChart({
           </>
         )}
       </svg>
+      <AnimatePresence>
       {hover && (
-        <div style={{
-          position: "absolute", left: Math.min(hover.x + 12, w - 200), top: 8,
-          background: "var(--ink)", color: "var(--accent-ink)",
-          padding: "8px 10px", borderRadius: 6, fontSize: 11, pointerEvents: "none",
-          fontFamily: "var(--font-mono)", letterSpacing: "0.5px",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.15)", whiteSpace: "nowrap",
-        }}>
+        <motion.div
+          layoutId="bigchart-tooltip"
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ type: "spring", stiffness: 480, damping: 36, mass: 0.6 }}
+          style={{
+            position: "absolute", left: Math.min(hover.x + 12, w - 200), top: 8,
+            background: "var(--ink)", color: "var(--accent-ink)",
+            padding: "8px 10px", borderRadius: 6, fontSize: 11, pointerEvents: "none",
+            fontFamily: "var(--font-mono)", letterSpacing: "0.5px",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.15)", whiteSpace: "nowrap",
+          }}
+        >
           <div style={{ opacity: 0.6, fontSize: 9, textTransform: "uppercase", marginBottom: 4 }}>
             {labels?.[hover.idx] ?? `dia ${series.length - hover.idx}`}
           </div>
@@ -248,8 +282,9 @@ export function BigChart({
               </span>
             </div>
           ))}
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }
