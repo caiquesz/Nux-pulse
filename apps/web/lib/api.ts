@@ -363,6 +363,26 @@ export const triggerMetaBackfill = (slug: string, body: BackfillPayload) =>
     { level: "ad", ...body }
   );
 
+// Inventario de saude de todas as conexoes Meta — usado pelo ReconnectBanner
+// global no AppShell pra avisar quando contas precisam ser reconectadas
+// (token nao decripta, falta token, etc).
+export type ConnectionHealth = {
+  client_slug: string;
+  client_name: string;
+  connection_id: number;
+  platform: "meta";
+  status: "ok" | "invalid_token" | "missing_token" | "decrypt_error";
+  reason: string | null;
+  last_error: string | null;
+};
+export type ConnectionsHealthResponse = {
+  total_connections: number;
+  needs_reconnect: number;
+  connections: ConnectionHealth[];
+};
+export const connectionsHealth = () =>
+  get<ConnectionsHealthResponse>(`/api/sync/connections/health`);
+
 // ═════════════════════════════════════════════════════════════════════════
 //  PLANEJAMENTO — Tarefas + Arquivos + Notificações + Equipe
 // ═════════════════════════════════════════════════════════════════════════

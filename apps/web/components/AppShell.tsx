@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { ReconnectBanner } from "./ReconnectBanner";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { TweaksPanel, type Theme, type Density, type ChartStyle, type Sidebar as SBState, type Period } from "./TweaksPanel";
@@ -45,6 +46,7 @@ export function AppShell({ slug, children }: { slug: string; children: React.Rea
           slug={slug}
           onOpenTweaks={() => setTweaksOpen(true)}
         />
+        <ReconnectBanner />
         <div className="page page-fade">{children}</div>
       </div>
       <TweaksPanel

@@ -171,6 +171,61 @@ def diagnose_meta(slug: str, db: Session = Depends(get_db)):
         }
 
 
+@router.get("/connections/health")
+def connections_health(db: Session = Depends(get_db)):
+    """Inventario de conexoes Meta com status de saude. Frontend usa isso pra
+    mostrar banner global "X contas precisam reconectar" + lista clicavel.
+
+    Pra cada conexao: tenta decriptar token. Se falhar com InvalidToken, marca
+    como `needs_reconnect` (chave Fernet mudou). Se decriptar mas Meta rejeitar,
+    marca outro tipo. Nao chama a Meta API aqui (rapido, so testa decrypt).
+    """
+    from app.core.crypto import InvalidToken, decrypt
+    rows = (
+        db.query(AccountConnection, Client)
+        .join(Client, Client.id == AccountConnection.client_id)
+        .filter(
+            AccountConnection.platform == Platform.meta,
+            Client.is_active.is_(True),
+        )
+        .all()
+    )
+    out = []
+    needs_reconnect = 0
+    for conn, client in rows:
+        status = "ok"
+        reason = None
+        if not conn.tokens_enc:
+            status = "missing_token"
+            reason = "Conexão sem token salvo"
+            needs_reconnect += 1
+        else:
+            try:
+                decrypt(conn.tokens_enc)
+            except InvalidToken:
+                status = "invalid_token"
+                reason = "Token nao decripta — chave de criptografia mudou"
+                needs_reconnect += 1
+            except Exception as e:
+                status = "decrypt_error"
+                reason = f"{type(e).__name__}: {str(e)[:100]}"
+                needs_reconnect += 1
+        out.append({
+            "client_slug": client.slug,
+            "client_name": client.name,
+            "connection_id": conn.id,
+            "platform": "meta",
+            "status": status,
+            "reason": reason,
+            "last_error": conn.last_error,
+        })
+    return {
+        "total_connections": len(out),
+        "needs_reconnect": needs_reconnect,
+        "connections": out,
+    }
+
+
 @router.post("/meta/{slug}/wipe-insights")
 def wipe_meta_insights(slug: str, db: Session = Depends(get_db)):
     """Deleta todas as linhas de meta_insights_daily do cliente.

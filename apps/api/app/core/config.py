@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
     API_SECRET_KEY: str = "dev-secret-change-me"
+    # ⚠️ CHAVE IMUTAVEL — usada pra criptografar tokens da Meta no banco.
+    # Se mudar, TODOS os tokens existentes viram lixo (InvalidToken). NUNCA
+    # rotacione sem migration que re-criptografa. Setar 1x e esquecer.
+    # Gerar com: `openssl rand -hex 32`
+    # Se vazia, falla pra derivar de API_SECRET_KEY (compat retro — perigo!).
+    TOKEN_ENCRYPTION_KEY: str | None = None
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3010"
 
     # Secret compartilhado com o cron proxy (Vercel). Obrigatório em produção.
