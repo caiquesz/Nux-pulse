@@ -425,10 +425,9 @@ export function Overview() {
 
         <div style={{ marginTop: 16, position: "relative", zIndex: 1 }}>
           {series.length > 1 ? (
-            // key bumpa no period change → BigChart remonta → wipe-from-left
-            // anima de novo. Critico pra usuario sentir a transicao 7d↔30d↔90d.
+            // SEM key — BigChart agora usa d3-interpolate-path internamente,
+            // entao transicao 7d↔30d↔90d e suave (morph), nao remount bruto.
             <BigChart
-              key={`chart-${queryKeyBase.join("-")}`}
               series={series}
               extras={extras}
               labels={dateLabels}

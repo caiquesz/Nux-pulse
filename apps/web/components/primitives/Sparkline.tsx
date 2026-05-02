@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { seriesToPath, seriesToBars } from "@/lib/chart-utils";
+import { MorphablePath } from "./MorphablePath";
 
 type Props = {
   series: number[];
@@ -83,11 +84,29 @@ export function Sparkline({
             ))
           : (
             <>
+              {/* MorphablePath: troca de periodo morpha o path em vez de
+                  snap. Duracao menor (0.7s) que BigChart pq sparkline e mais
+                  rapido visual. CSS .spark-line-anim continua dando entrance
+                  no mount inicial. */}
               {style !== "line" && (
-                <path d={area} fill={`url(#${gradId})`} className="spark-area-anim" />
+                <MorphablePath
+                  d={area}
+                  fill={`url(#${gradId})`}
+                  className="spark-area-anim"
+                  duration={0.7}
+                />
               )}
-              {cmp && <path d={cmp.line} fill="none" stroke="var(--chart-line-2)" strokeWidth={1.25} strokeDasharray="3 3" />}
-              <path
+              {cmp && (
+                <MorphablePath
+                  d={cmp.line}
+                  fill="none"
+                  stroke="var(--chart-line-2)"
+                  strokeWidth={1.25}
+                  strokeDasharray="3 3"
+                  duration={0.7}
+                />
+              )}
+              <MorphablePath
                 d={line}
                 fill="none"
                 stroke="var(--chart-line)"
@@ -95,6 +114,7 @@ export function Sparkline({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 className="spark-line-anim"
+                duration={0.7}
               />
             </>
           )}

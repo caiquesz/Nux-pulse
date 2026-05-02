@@ -2,6 +2,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { seriesToPath, seriesToBars, formatShort } from "@/lib/chart-utils";
+import { MorphablePath } from "./MorphablePath";
 
 /** Linha extra com escala propria (auto-normalizada). Render solido, sem dasharray. */
 export type ExtraSeries = {
@@ -190,14 +191,22 @@ export function BigChart({
           ))
         ) : (
           <>
+            {/* MorphablePath usa d3-interpolate-path: troca de periodo
+                (7d->30d) interpola pontos suavemente em vez de snap. CSS class
+                bigchart-area-fade ainda controla opacity entrance no mount. */}
             {style !== "line" && (
-              <path d={area} fill={`url(#${fillGradId})`} className="bigchart-area-fade" />
+              <MorphablePath
+                d={area}
+                fill={`url(#${fillGradId})`}
+                className="bigchart-area-fade"
+              />
             )}
             {/* Extras (multi-line) renderizadas SOLIDAS com cores proprias.
                 Layer abaixo da linha primaria pra primaria continuar dominante.
-                Stagger via animationDelay indexado — primaria desenha primeiro. */}
+                Stagger via animationDelay indexado — primaria desenha primeiro.
+                MorphablePath garante transition suave entre datasets. */}
             {extraPaths.map((e, i) => (
-              <path
+              <MorphablePath
                 key={`extra-${i}`}
                 d={e.path.line}
                 fill="none"
@@ -210,13 +219,21 @@ export function BigChart({
                 style={{ animationDelay: `${(i + 1) * 120}ms` }}
               />
             ))}
-            {/* compare legacy — agora SOLIDO (era tracejado). Recomenda-se migrar pra extras. */}
+            {/* compare legacy — agora SOLIDO (era tracejado). */}
             {cmpPath && (
-              <path d={cmpPath.line} fill="none" stroke={compareColor} strokeWidth={1.75}
-                    strokeLinecap="round" strokeLinejoin="round" opacity={0.92}
-                    className="bigchart-line-draw" style={{ animationDelay: "120ms" }} />
+              <MorphablePath
+                d={cmpPath.line}
+                fill="none"
+                stroke={compareColor}
+                strokeWidth={1.75}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                opacity={0.92}
+                className="bigchart-line-draw"
+                style={{ animationDelay: "120ms" }}
+              />
             )}
-            <path
+            <MorphablePath
               d={line}
               fill="none"
               stroke={`url(#${lineGradId})`}
