@@ -283,7 +283,7 @@ export function Overview() {
               <span className="stat-value">
                 {loading || k.numericValue == null
                   ? k.value
-                  : <AnimatedNumber value={k.numericValue} format={k.format} duration={1.0} />}
+                  : <AnimatedNumber value={k.numericValue} format={k.format} duration={0.7} />}
               </span>
               {k.series.length > 1 && (
                 <div className="stat-spark">
